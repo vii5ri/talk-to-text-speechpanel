@@ -1,0 +1,8 @@
+customtkinter
+numpy
+sounddevice
+SpeechRecognition
+deep-translator
+pyperclip
+keyboard
+google-cloud-speech

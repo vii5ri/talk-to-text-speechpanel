@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# Config with credentials
+# speech_panel_config.json is safe (no API keys)
+
+# OS
+Thumbs.db
+desktop.ini
+.DS_Store
