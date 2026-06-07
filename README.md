@@ -1,4 +1,4 @@
-# SpeechPanel — วิธี Install
+# SpeechPanel v2 — วิธี Install
 
 โปรแกรมแปลงเสียงเป็นข้อความ ภาษาไทย / อังกฤษ  
 รองรับ 3 โหมด: Free (Google STT) | Vosk (ออฟไลน์) | Google Cloud STT

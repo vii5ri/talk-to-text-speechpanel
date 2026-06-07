@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Speech Panel v5 — Thai / English Speech-to-Text
+Speech Panel v2 — Thai / English Speech-to-Text
 Modes: 🌐 Free | 🔌 Vosk (offline real-time) | ☁️ Google Cloud (real-time)
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
 """
@@ -45,6 +45,8 @@ AI_CHATS   = {
 _BASE = os.path.dirname(os.path.abspath(
     sys.executable if getattr(sys, 'frozen', False) else __file__))
 _CFG  = os.path.join(_BASE, 'speech_panel_config.json')
+_ICON_FILE = os.path.join(_BASE, 'speech_panel.ico')
+VERSION = '2.0'
 
 def _load_cfg() -> dict:
     try:
@@ -91,8 +93,16 @@ def _sm_exists() -> bool: return os.path.exists(_sm_path())
 def _sm_create():
     t = sys.executable.replace('\\','\\\\')
     p = _sm_path().replace('\\','\\\\')
+    icon = _ICON_FILE if os.path.isfile(_ICON_FILE) else t
+    icon = icon.replace('\\','\\\\')
+    cwd = _BASE.replace('\\','\\\\')
     subprocess.run(['powershell','-NoProfile','-Command',
-        f'$s=(New-Object -COM WScript.Shell).CreateShortcut("{p}");$s.TargetPath="{t}";$s.Save()'],
+        f'$s=(New-Object -COM WScript.Shell).CreateShortcut("{p}");'
+        f'$s.TargetPath="{t}";'
+        f'$s.Arguments="speech_panel.py";'
+        f'$s.WorkingDirectory="{cwd}";'
+        f'$s.IconLocation="{icon}";'
+        '$s.Save()'],
         creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
 
 def _sm_remove():
@@ -315,7 +325,7 @@ class SpeechPanel(ctk.CTk):
     # ── Window ────────────────────────────────────────────────────────────────
 
     def _init_window(self):
-        self.title('Speech Panel')
+        self.title(f'Speech Panel v{VERSION}')
         self.overrideredirect(True)
         self.attributes('-topmost', True)
         self.configure(fg_color=C['bg'])
@@ -393,17 +403,13 @@ class SpeechPanel(ctk.CTk):
         self._replace_hint = ctk.CTkLabel(mz, text='', font=_f(10), text_color=C['purple'])
         self._replace_hint.pack(pady=(0,1))
 
-        # Live preview (real-time text for Vosk/GCloud)
+        # Live preview (disabled - use space for combined box)
         self._partial_tb = ctk.CTkTextbox(
-            left, height=72, font=_f(15),
+            left, height=1, font=_f(15),
             fg_color=C['card2'], text_color=C['accent'],
-            border_width=1, border_color=C['border'],
+            border_width=0, border_color=C['border'],
             wrap='word', state='disabled')
-        self._partial_tb.pack(fill='x', padx=4, pady=(2,2))
-
-        ctk.CTkLabel(left, text='💡 เลือกข้อความ → กดไมค์ → พูดแทนที่',
-                     font=_f(9), text_color=C['sub'],
-                     wraplength=LEFT_W-16).pack(padx=4, pady=(0,2))
+        self._partial_tb.pack(fill='x', padx=4, pady=(0,0))
 
         # Action bar
         act = ctk.CTkFrame(left, fg_color=C['bg'])
@@ -418,9 +424,21 @@ class SpeechPanel(ctk.CTk):
                       fg_color=C['card'], hover_color='#b91c1c',
                       command=self._clear_all).pack(side='right')
 
+        # Tools row (Image to Text, Talk to Text)
+        tools_row = ctk.CTkFrame(left, fg_color=C['bg'])
+        tools_row.pack(fill='x', padx=4, pady=(0, 2))
+        ctk.CTkButton(tools_row, text='🖼 Image to Text', height=26, font=_f(11),
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      command=lambda: webbrowser.open('https://image-to-type-helper.lovable.app/')
+                      ).pack(side='left', fill='x', expand=True, padx=(0, 2))
+        ctk.CTkButton(tools_row, text='💬 Talk to Text', height=26, font=_f(11),
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      command=lambda: webbrowser.open('https://talk-to-text-thai.lovable.app/')
+                      ).pack(side='left', fill='x', expand=True)
+
         # AI Chat launcher
         ai_row = ctk.CTkFrame(left, fg_color=C['card'], corner_radius=8)
-        ai_row.pack(fill='x', padx=4, pady=(0, 4))
+        ai_row.pack(fill='x', padx=4, pady=(2, 4))
         ctk.CTkLabel(ai_row, text='🤖', font=ctk.CTkFont(size=13),
                      text_color=C['accent']).pack(side='left', padx=(8, 2), pady=4)
         self._ai_var = tk.StringVar(value='ChatGPT')
@@ -614,7 +632,6 @@ class SpeechPanel(ctk.CTk):
         else: self._start_rec()
 
     def _start_rec(self):
-        # Check replace-by-voice selection
         self._replace_card = None; self._replace_sel = None
         for card in self._cards:
             sel = card.get_selection()
@@ -645,7 +662,6 @@ class SpeechPanel(ctk.CTk):
         self._timer_lbl.configure(text=''); self._replace_hint.configure(text='')
 
     def _finish_text(self, text: str):
-        """After transcription: either replace selection or add new segment."""
         if not text: self._set_status('ไม่ได้ยิน'); return
         if self._replace_card and self._replace_sel:
             c, s, e_ = self._replace_card, *self._replace_sel

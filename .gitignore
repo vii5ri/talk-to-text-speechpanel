@@ -10,6 +10,7 @@ dist/
 
 # Config with credentials
 # speech_panel_config.json is safe (no API keys)
+project-*.json
 
 # OS
 Thumbs.db
