@@ -231,7 +231,7 @@ class SegmentCard(ctk.CTkFrame):
         self._build(text)
 
     def _build(self, text):
-        top = ctk.CTkFrame(self, fg_color='transparent', height=28)
+        top = ctk.CTkFrame(self, fg_color='transparent', height=38)
         top.pack(fill='x', padx=4, pady=(4,0))
         top.pack_propagate(False)
 
@@ -240,19 +240,19 @@ class SegmentCard(ctk.CTkFrame):
                         checkmark_color='#fff').pack(side='left')
         ctk.CTkLabel(top, text=f'#{self.seg_id}', font=_f(10),
                      text_color=C['sub']).pack(side='left', padx=(3,1))
-        ctk.CTkButton(top, text='▲', width=22, height=22, fg_color='transparent',
-                      hover_color=C['card2'], font=ctk.CTkFont(size=10),
+        ctk.CTkButton(top, text='▲', width=28, height=30, fg_color='transparent',
+                      hover_color=C['card2'], font=ctk.CTkFont(size=13),
                       command=lambda: self._up_cb(self)).pack(side='left', padx=1)
-        ctk.CTkButton(top, text='▼', width=22, height=22, fg_color='transparent',
-                      hover_color=C['card2'], font=ctk.CTkFont(size=10),
+        ctk.CTkButton(top, text='▼', width=28, height=30, fg_color='transparent',
+                      hover_color=C['card2'], font=ctk.CTkFont(size=13),
                       command=lambda: self._down_cb(self)).pack(side='left', padx=1)
 
         self._copied_lbl = ctk.CTkLabel(top, text='', font=_f(10,'bold'),
                                          text_color=C['green'], fg_color='transparent')
         self._copied_lbl.pack(side='left', padx=(4,0))
 
-        ctk.CTkButton(top, text='🗑', width=24, height=22, fg_color='transparent',
-                      hover_color=C['del_hover'], font=ctk.CTkFont(size=11),
+        ctk.CTkButton(top, text='🗑', width=48, height=34, fg_color='transparent',
+                      hover_color=C['del_hover'], font=ctk.CTkFont(size=22),
                       command=lambda: self._del_cb(self)).pack(side='right')
 
         self._tb = ctk.CTkTextbox(self, height=96, font=_f(17),
@@ -337,27 +337,32 @@ class SpeechPanel(ctk.CTk):
 
     def _build_ui(self):
         # Header
-        hdr = ctk.CTkFrame(self, fg_color=C['header'], height=46, corner_radius=0)
+        hdr = ctk.CTkFrame(self, fg_color=C['header'], height=58, corner_radius=0)
         hdr.pack(fill='x'); hdr.pack_propagate(False)
         hdr.bind('<Button-1>', self._drag_start)
         hdr.bind('<B1-Motion>', self._drag_move)
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
-        ctk.CTkButton(hdr, text='✕', width=30, height=28, fg_color='transparent',
-                      hover_color='#b91c1c', font=ctk.CTkFont(size=12), text_color=C['sub'],
-                      command=self._toggle_visibility).pack(side='right', padx=(0,8))
-        self._theme_btn = ctk.CTkButton(hdr, text='☀️', width=30, height=28,
+        # Close (quit) button
+        ctk.CTkButton(hdr, text='✕', width=50, height=44, fg_color='transparent',
+                      hover_color='#b91c1c', font=ctk.CTkFont(size=20), text_color=C['sub'],
+                      command=self._quit_app).pack(side='right', padx=(0,6))
+        # Minimize/hide button
+        ctk.CTkButton(hdr, text='─', width=50, height=44, fg_color='transparent',
+                      hover_color=C['card'], font=ctk.CTkFont(size=20), text_color=C['sub'],
+                      command=self._toggle_visibility).pack(side='right', padx=(0,2))
+        self._theme_btn = ctk.CTkButton(hdr, text='☀️', width=46, height=44,
                                          fg_color='transparent', hover_color=C['card'],
-                                         font=ctk.CTkFont(size=14), command=self._toggle_theme)
+                                         font=ctk.CTkFont(size=20), command=self._toggle_theme)
         self._theme_btn.pack(side='right', padx=2)
-        self._startup_btn = ctk.CTkButton(hdr, text='⚙️', width=30, height=28,
+        self._startup_btn = ctk.CTkButton(hdr, text='⚙️', width=46, height=44,
                                            fg_color='transparent', hover_color=C['card'],
-                                           font=ctk.CTkFont(size=14), command=self._show_settings)
+                                           font=ctk.CTkFont(size=20), command=self._show_settings)
         self._startup_btn.pack(side='right', padx=2)
-        ctk.CTkButton(hdr, text='🖼', width=30, height=28,
+        ctk.CTkButton(hdr, text='🖼', width=46, height=44,
                       fg_color='transparent', hover_color=C['card'],
-                      font=ctk.CTkFont(size=14),
+                      font=ctk.CTkFont(size=20),
                       command=lambda: webbrowser.open(IMAGE_TOOL)
                       ).pack(side='right', padx=2)
 
@@ -420,7 +425,7 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(act, text='📋 ที่เลือก', height=26, font=_f(11),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
                       command=self._copy_selected).pack(side='left', fill='x', expand=True, padx=(0,2))
-        ctk.CTkButton(act, text='🗑', height=26, width=30, font=ctk.CTkFont(size=13),
+        ctk.CTkButton(act, text='🗑', height=40, width=48, font=ctk.CTkFont(size=22),
                       fg_color=C['card'], hover_color='#b91c1c',
                       command=self._clear_all).pack(side='right')
 
@@ -566,6 +571,11 @@ class SpeechPanel(ctk.CTk):
     def _toggle_visibility(self):
         if self._visible: self.withdraw(); self._visible = False
         else: self.deiconify(); self.lift(); self._visible = True
+
+    def _quit_app(self):
+        try: keyboard.unhook_all()
+        except Exception: pass
+        self.destroy()
 
     # ── Settings ──────────────────────────────────────────────────────────────
 
