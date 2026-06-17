@@ -498,7 +498,7 @@ class SpeechPanel(ctk.CTk):
         self._trans_box = ctk.CTkTextbox(ts, height=120, font=_f(17),
                                           fg_color=C['combined'], text_color=C['text'],
                                           border_width=1, border_color=C['border'],
-                                          wrap='word', state='disabled')
+                                          wrap='word')
         self._trans_box.pack(fill='x', padx=4, pady=(0,3))
         ctk.CTkButton(ts, text='📋 Copy คำแปล', height=28, font=_f(12),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
@@ -510,7 +510,7 @@ class SpeechPanel(ctk.CTk):
         self._cross_box = ctk.CTkTextbox(ts, height=120, font=_f(17),
                                           fg_color=C['combined'], text_color=C['text'],
                                           border_width=1, border_color=C['border'],
-                                          wrap='word', state='disabled')
+                                          wrap='word')
         self._cross_box.pack(fill='x', padx=4, pady=(0,3))
         ctk.CTkButton(ts, text='📋 Copy Cross-check', height=25, font=_f(11),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
@@ -528,7 +528,7 @@ class SpeechPanel(ctk.CTk):
         self._combined_tb = ctk.CTkTextbox(right, font=_f(17),
                                             fg_color=C['combined'], text_color=C['text'],
                                             border_width=1, border_color=C['border'],
-                                            wrap='word', state='disabled')
+                                            wrap='word')
         self._combined_tb.pack(side='top', fill='both', expand=True, padx=4, pady=(0,4))
 
         self._add_resize_grip()
@@ -907,23 +907,18 @@ class SpeechPanel(ctk.CTk):
         self._set_tb(self._combined_tb, SEP.join(texts))
 
     def _set_tb(self, tb, text):
-        tb.configure(state='normal'); tb.delete('1.0','end')
+        tb.delete('1.0','end')
         if text: tb.insert('1.0', text)
-        tb.configure(state='disabled')
 
     def _copy_combined(self):
-        self._combined_tb.configure(state='normal')
         t = self._combined_tb.get('1.0','end').strip()
-        self._combined_tb.configure(state='disabled')
         if t: pyperclip.copy(t); self.show_toast('📋 Copy กล่องรวมแล้ว')
         else: self.show_toast('กล่องรวมว่างอยู่','info')
 
     # ── Translation ───────────────────────────────────────────────────────────
 
     def _do_translate(self):
-        self._combined_tb.configure(state='normal')
         text = self._combined_tb.get('1.0','end').strip()
-        self._combined_tb.configure(state='disabled')
         if not text: self.show_toast('กล่องรวมว่าง','info'); return
         d = self._trans_dir.get()
         src, tgt = ('th','en') if d == 'TH→EN' else ('en','th')
@@ -938,11 +933,11 @@ class SpeechPanel(ctk.CTk):
         threading.Thread(target=do, daemon=True).start()
 
     def _copy_trans(self):
-        self._trans_box.configure(state='normal'); t = self._trans_box.get('1.0','end').strip(); self._trans_box.configure(state='disabled')
+        t = self._trans_box.get('1.0','end').strip()
         if t: pyperclip.copy(t); self.show_toast('📋 Copy คำแปลแล้ว')
 
     def _copy_cross(self):
-        self._cross_box.configure(state='normal'); t = self._cross_box.get('1.0','end').strip(); self._cross_box.configure(state='disabled')
+        t = self._cross_box.get('1.0','end').strip()
         if t: pyperclip.copy(t); self.show_toast('📋 Copy Cross-check แล้ว')
 
     # ── Bulk ──────────────────────────────────────────────────────────────────
