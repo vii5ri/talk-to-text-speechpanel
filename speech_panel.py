@@ -23,7 +23,7 @@ STT_VOSK   = 'vosk'
 STT_GCLOUD = 'gcloud'
 
 # ── Layout ────────────────────────────────────────────────────────────────────
-PANEL_W    = 1060
+PANEL_W    = 880
 PANEL_H    = 980
 LEFT_W     = 520
 HOTKEY     = 'ctrl+shift+space'
@@ -343,6 +343,7 @@ class SpeechPanel(ctk.CTk):
         hdr.pack(fill='x'); hdr.pack_propagate(False)
         hdr.bind('<Button-1>', self._drag_start)
         hdr.bind('<B1-Motion>', self._drag_move)
+        hdr.bind('<ButtonRelease-1>', self._drag_end)
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
@@ -638,6 +639,13 @@ class SpeechPanel(ctk.CTk):
 
     def _drag_start(self, e): self._ox = e.x_root - self.winfo_x(); self._oy = e.y_root - self.winfo_y()
     def _drag_move(self, e): self.geometry(f'+{e.x_root-self._ox}+{e.y_root-self._oy}')
+
+    def _drag_end(self, e):
+        x = self.winfo_x()
+        sw = self.winfo_screenwidth()
+        w = self.winfo_width()
+        target_x = 0 if (x + w // 2) < sw // 2 else sw - w
+        self.geometry(f'+{target_x}+{self.winfo_y()}')
 
     # ── Visibility ────────────────────────────────────────────────────────────
 
