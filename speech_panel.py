@@ -316,6 +316,8 @@ class SpeechPanel(ctk.CTk):
         self._gc_queue     = None
         self._gc_done      = False
         self._gc_final     = ''
+        # Vocabulary (custom word corrections)
+        self._vocab: list[str] = self._cfg.get('vocab', [])
 
         self._init_window()
         self._build_ui()
@@ -521,6 +523,9 @@ class SpeechPanel(ctk.CTk):
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._copy_combined).pack(side='bottom', fill='x', padx=4, pady=(0,4))
 
+        # Vocabulary panel (above combined box)
+        self._build_vocab_panel(right)
+
         # Combined box (fills remaining space)
         ctk.CTkLabel(right, text='📄 กล่องรวมข้อความ',
                      font=_f(13,'bold'), text_color=C['sub']
@@ -532,6 +537,74 @@ class SpeechPanel(ctk.CTk):
         self._combined_tb.pack(side='top', fill='both', expand=True, padx=4, pady=(0,4))
 
         self._add_resize_grip()
+
+    # ── Vocabulary panel ──────────────────────────────────────────────────────
+
+    def _build_vocab_panel(self, parent):
+        vf = ctk.CTkFrame(parent, fg_color=C['card'], corner_radius=8,
+                          border_width=1, border_color=C['border'])
+        vf.pack(side='top', fill='x', padx=4, pady=(2,4))
+
+        hr = ctk.CTkFrame(vf, fg_color='transparent')
+        hr.pack(fill='x', padx=6, pady=(5,2))
+        ctk.CTkLabel(hr, text='📚 คำศัพท์ — คลิกเพื่อ Copy',
+                     font=_f(11,'bold'), text_color=C['accent']).pack(side='left')
+        ctk.CTkButton(hr, text='+ เพิ่มคำ', width=76, height=26, font=_f(11),
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      command=self._prompt_add_vocab).pack(side='right')
+
+        self._vocab_scroll = ctk.CTkScrollableFrame(
+            vf, fg_color='transparent', height=95,
+            scrollbar_button_color=C['border'],
+            scrollbar_button_hover_color=C['sub'])
+        self._vocab_scroll.pack(fill='x', padx=4, pady=(0,4))
+        self._refresh_vocab()
+
+    def _refresh_vocab(self):
+        for w in self._vocab_scroll.winfo_children():
+            w.destroy()
+        if not self._vocab:
+            ctk.CTkLabel(self._vocab_scroll,
+                         text='ยังไม่มีคำ — กด "+ เพิ่มคำ" เพื่อใส่คำที่ถูกต้อง',
+                         font=_f(10), text_color=C['sub']).pack(pady=6)
+            return
+        for word in self._vocab:
+            row = ctk.CTkFrame(self._vocab_scroll, fg_color='transparent')
+            row.pack(fill='x', pady=1)
+            ctk.CTkButton(row, text=word, font=_f(13), anchor='w',
+                          fg_color=C['card2'], hover_color=C['accent'],
+                          text_color=C['text'],
+                          command=lambda w=word: self._copy_vocab(w)
+                          ).pack(side='left', fill='x', expand=True, padx=(0,3))
+            ctk.CTkButton(row, text='🗑', width=34, height=30,
+                          font=ctk.CTkFont(size=15), fg_color='transparent',
+                          hover_color=C['del_hover'],
+                          command=lambda w=word: self._delete_vocab(w)
+                          ).pack(side='right')
+
+    def _prompt_add_vocab(self):
+        dialog = ctk.CTkInputDialog(text='พิมพ์คำที่ต้องการเพิ่ม:', title='เพิ่มคำศัพท์')
+        word = dialog.get_input()
+        if word and word.strip():
+            w = word.strip()
+            if w not in self._vocab:
+                self._vocab.append(w)
+                self._cfg['vocab'] = self._vocab
+                _save_cfg(self._cfg)
+                self._refresh_vocab()
+                self.show_toast(f'เพิ่ม "{w}" แล้ว')
+
+    def _delete_vocab(self, word):
+        if word in self._vocab:
+            self._vocab.remove(word)
+            self._cfg['vocab'] = self._vocab
+            _save_cfg(self._cfg)
+            self._refresh_vocab()
+            self.show_toast(f'ลบ "{word}" แล้ว', 'info')
+
+    def _copy_vocab(self, word):
+        pyperclip.copy(word)
+        self.show_toast(f'📋 คัดลอก "{word}" แล้ว')
 
     # ── Resize grip ───────────────────────────────────────────────────────────
 
