@@ -318,8 +318,9 @@ class SpeechPanel(ctk.CTk):
         self._gc_final     = ''
         # Vocabulary (custom word corrections)
         self._vocab: list[str] = self._cfg.get('vocab', [])
-        self._snap_edge = 'left'
-        self._edge_tab  = None
+        self._snap_edge      = 'left'
+        self._edge_tab       = None
+        self._edge_tab_locked = False
 
         self._init_window()
         self._build_ui()
@@ -714,38 +715,57 @@ class SpeechPanel(ctk.CTk):
         edge   = self._snap_edge
         arrows = {'left': '▶', 'right': '◀', 'top': '▼', 'bottom': '▲'}
         arrow  = arrows.get(edge, '▶')
-        if edge == 'left':
-            tw, th = 22, 70
-            tx = 0
-            ty = max(0, min(py + (ph - th) // 2, sh - th))
-        elif edge == 'right':
-            tw, th = 22, 70
-            tx = sw - tw
-            ty = max(0, min(py + (ph - th) // 2, sh - th))
-        elif edge == 'top':
-            tw, th = 70, 22
-            tx = max(0, min(px + (pw - tw) // 2, sw - tw))
-            ty = 0
+        vertical = edge in ('left', 'right')
+        if vertical:
+            tw, th = 28, 96
         else:
-            tw, th = 70, 22
-            tx = max(0, min(px + (pw - tw) // 2, sw - tw))
-            ty = sh - th
+            tw, th = 116, 28
+        if edge == 'left':
+            tx, ty = 0, max(0, min(py + (ph - th) // 2, sh - th))
+        elif edge == 'right':
+            tx, ty = sw - tw, max(0, min(py + (ph - th) // 2, sh - th))
+        elif edge == 'top':
+            tx, ty = max(0, min(px + (pw - tw) // 2, sw - tw)), 0
+        else:
+            tx, ty = max(0, min(px + (pw - tw) // 2, sw - tw)), sh - th
         tab = tk.Toplevel()
         tab.overrideredirect(True)
         tab.attributes('-topmost', True)
         tab.configure(bg=C['accent'])
         tab.geometry(f'{tw}x{th}+{tx}+{ty}')
-        lbl = tk.Label(tab, text=arrow, bg=C['accent'], fg='white',
-                       font=('Leelawadee UI', 13, 'bold'), cursor='hand2')
-        lbl.pack(fill='both', expand=True)
+        lock_bg   = C['red']    if self._edge_tab_locked else C['accent']
+        lock_icon = '🔒' if self._edge_tab_locked else '🔓'
+        expand_lbl = tk.Label(tab, text=arrow, bg=C['accent'], fg='white',
+                              font=('Leelawadee UI', 13, 'bold'), cursor='hand2')
+        lock_lbl   = tk.Label(tab, text=lock_icon, bg=lock_bg, fg='white',
+                              font=('Leelawadee UI', 10), cursor='hand2')
+        if vertical:
+            expand_lbl.pack(fill='both', expand=True, side='top')
+            lock_lbl.pack(fill='x', side='bottom', ipady=5)
+        else:
+            expand_lbl.pack(fill='both', expand=True, side='left')
+            lock_lbl.pack(fill='y', side='right', ipadx=7)
         hover_job = [None]
         def _on_enter(e=None):
+            if self._edge_tab_locked:
+                return
             if hover_job[0]:
                 try: tab.after_cancel(hover_job[0])
                 except Exception: pass
             hover_job[0] = tab.after(350, self._expand_panel)
-        lbl.bind('<Button-1>', lambda e: self._expand_panel())
-        lbl.bind('<Enter>', _on_enter)
+        def _toggle_lock(e=None):
+            self._edge_tab_locked = not self._edge_tab_locked
+            if self._edge_tab_locked:
+                lock_lbl.configure(bg=C['red'], text='🔒')
+                if hover_job[0]:
+                    try: tab.after_cancel(hover_job[0])
+                    except Exception: pass
+                    hover_job[0] = None
+            else:
+                lock_lbl.configure(bg=C['accent'], text='🔓')
+        expand_lbl.bind('<Button-1>', lambda e: self._expand_panel())
+        expand_lbl.bind('<Enter>', _on_enter)
+        lock_lbl.bind('<Button-1>', _toggle_lock)
         tab.bind('<Enter>', _on_enter)
         self._edge_tab = tab
 
