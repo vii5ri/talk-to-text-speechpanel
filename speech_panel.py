@@ -350,11 +350,38 @@ class SpeechPanel(ctk.CTk):
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
-        self._collapse_btn = ctk.CTkButton(hdr, text='◀', width=46, height=44,
-                                            fg_color='transparent', hover_color=C['card'],
-                                            font=ctk.CTkFont(size=18), text_color=C['sub'],
-                                            command=self._collapse_panel)
-        self._collapse_btn.pack(side='left', padx=(0, 4))
+        # 4 snap-direction buttons
+        self._snap_btns = {}
+        _sf = ctk.CTkFrame(hdr, fg_color='transparent')
+        _sf.pack(side='left', padx=(0, 2))
+        for _d, _s in [('left','◀'), ('top','▲'), ('right','▶'), ('bottom','▼')]:
+            _active = _d == self._snap_edge
+            _b = ctk.CTkButton(
+                _sf, text=_s, width=30, height=36,
+                fg_color=C['accent'] if _active else 'transparent',
+                hover_color=C['purple'],
+                font=ctk.CTkFont(size=13),
+                text_color='#fff' if _active else C['sub'],
+                command=lambda d=_d: self._snap_to_edge(d))
+            _b.pack(side='left', padx=1)
+            self._snap_btns[_d] = _b
+        # Collapse button (collapses to current snap edge)
+        self._collapse_btn = ctk.CTkButton(
+            hdr, text='ย่อ', width=42, height=36,
+            fg_color=C['card'], hover_color=C['card2'],
+            font=_f(10), text_color=C['sub'],
+            command=self._collapse_panel)
+        self._collapse_btn.pack(side='left', padx=(3, 0))
+        # Lock button (main panel)
+        self._lock_btn = ctk.CTkButton(
+            hdr,
+            text='🔒' if self._edge_tab_locked else '🔓',
+            width=40, height=36,
+            fg_color=C['red'] if self._edge_tab_locked else C['accent'],
+            hover_color=C['purple'],
+            font=ctk.CTkFont(size=14),
+            command=self._toggle_lock)
+        self._lock_btn.pack(side='left', padx=(2, 4))
         # Close (quit) button
         ctk.CTkButton(hdr, text='✕', width=50, height=44, fg_color='transparent',
                       hover_color='#b91c1c', font=ctk.CTkFont(size=20), text_color=C['sub'],
@@ -674,7 +701,7 @@ class SpeechPanel(ctk.CTk):
             self._snap_edge = 'top';    self.geometry(f'+{x}+0')
         else:
             self._snap_edge = 'bottom'; self.geometry(f'+{x}+{sh-h}')
-        self._update_collapse_btn()
+        self._update_snap_btns()
 
     # ── Visibility ────────────────────────────────────────────────────────────
 
@@ -687,9 +714,36 @@ class SpeechPanel(ctk.CTk):
             self.deiconify(); self.lift()
             self._visible = True
 
-    def _update_collapse_btn(self):
-        arrows = {'left': '◀', 'right': '▶', 'top': '▲', 'bottom': '▼'}
-        self._collapse_btn.configure(text=arrows.get(self._snap_edge, '◀'))
+    def _update_snap_btns(self):
+        for d, btn in self._snap_btns.items():
+            active = d == self._snap_edge
+            btn.configure(
+                fg_color=C['accent'] if active else 'transparent',
+                text_color='#fff' if active else C['sub'])
+
+    def _snap_to_edge(self, edge):
+        self._snap_edge = edge
+        sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
+        w  = self.winfo_width();       h  = self.winfo_height()
+        positions = {
+            'left':   (0,        (sh - h) // 2),
+            'right':  (sw - w,   (sh - h) // 2),
+            'top':    ((sw - w) // 2, 0),
+            'bottom': ((sw - w) // 2, sh - h),
+        }
+        x, y = positions[edge]
+        self.geometry(f'+{x}+{y}')
+        self._update_snap_btns()
+
+    def _toggle_lock(self):
+        self._edge_tab_locked = not self._edge_tab_locked
+        self._update_lock_btn()
+
+    def _update_lock_btn(self):
+        if self._edge_tab_locked:
+            self._lock_btn.configure(fg_color=C['red'],    text='🔒')
+        else:
+            self._lock_btn.configure(fg_color=C['accent'], text='🔓')
 
     def _collapse_panel(self):
         self._show_edge_tab()
@@ -700,6 +754,7 @@ class SpeechPanel(ctk.CTk):
         self._destroy_edge_tab()
         self.deiconify(); self.lift()
         self._visible = True
+        self._update_lock_btn()
 
     def _destroy_edge_tab(self):
         if self._edge_tab:
