@@ -318,6 +318,8 @@ class SpeechPanel(ctk.CTk):
         self._gc_final     = ''
         # Vocabulary (custom word corrections)
         self._vocab: list[str] = self._cfg.get('vocab', [])
+        self._snap_edge = 'left'
+        self._edge_tab  = None
 
         self._init_window()
         self._build_ui()
@@ -347,6 +349,11 @@ class SpeechPanel(ctk.CTk):
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
+        self._collapse_btn = ctk.CTkButton(hdr, text='◀', width=46, height=44,
+                                            fg_color='transparent', hover_color=C['card'],
+                                            font=ctk.CTkFont(size=18), text_color=C['sub'],
+                                            command=self._collapse_panel)
+        self._collapse_btn.pack(side='left', padx=(0, 4))
         # Close (quit) button
         ctk.CTkButton(hdr, text='✕', width=50, height=44, fg_color='transparent',
                       hover_color='#b91c1c', font=ctk.CTkFont(size=20), text_color=C['sub'],
@@ -503,9 +510,14 @@ class SpeechPanel(ctk.CTk):
                                           border_width=1, border_color=C['border'],
                                           wrap='word')
         self._trans_box.pack(fill='x', padx=4, pady=(0,3))
-        ctk.CTkButton(ts, text='📋 Copy คำแปล', height=28, font=_f(12),
+        _tb_row = ctk.CTkFrame(ts, fg_color='transparent')
+        _tb_row.pack(fill='x', padx=4, pady=(0,5))
+        ctk.CTkButton(_tb_row, text='📋 Copy คำแปล', height=28, font=_f(12),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
-                      command=self._copy_trans).pack(fill='x', padx=4, pady=(0,5))
+                      command=self._copy_trans).pack(side='left', fill='x', expand=True, padx=(0,2))
+        ctk.CTkButton(_tb_row, text='🗑 ล้าง', height=28, font=_f(12),
+                      fg_color=C['card'], hover_color=C['del_hover'], text_color=C['text'],
+                      command=lambda: self._set_tb(self._trans_box, '')).pack(side='right')
 
         ctk.CTkFrame(ts, height=1, fg_color=C['border']).pack(fill='x', padx=4, pady=(0,5))
         ctk.CTkLabel(ts, text='🔍 Cross-check (แปลกลับ)', font=_f(12), text_color=C['sub']
@@ -515,9 +527,14 @@ class SpeechPanel(ctk.CTk):
                                           border_width=1, border_color=C['border'],
                                           wrap='word')
         self._cross_box.pack(fill='x', padx=4, pady=(0,3))
-        ctk.CTkButton(ts, text='📋 Copy Cross-check', height=25, font=_f(11),
+        _cb_row = ctk.CTkFrame(ts, fg_color='transparent')
+        _cb_row.pack(fill='x', padx=4, pady=(0,4))
+        ctk.CTkButton(_cb_row, text='📋 Copy Cross-check', height=25, font=_f(11),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
-                      command=self._copy_cross).pack(fill='x', padx=4, pady=(0,4))
+                      command=self._copy_cross).pack(side='left', fill='x', expand=True, padx=(0,2))
+        ctk.CTkButton(_cb_row, text='🗑 ล้าง', height=25, font=_f(11),
+                      fg_color=C['card'], hover_color=C['del_hover'], text_color=C['text'],
+                      command=lambda: self._set_tb(self._cross_box, '')).pack(side='right')
 
         # Copy combined button (bottom of combined section)
         ctk.CTkButton(right, text='📋 Copy กล่องรวม', height=28, font=_f(12),
@@ -604,7 +621,7 @@ class SpeechPanel(ctk.CTk):
             self.show_toast(f'ลบ "{word}" แล้ว', 'info')
 
     def _copy_vocab(self, word):
-        pyperclip.copy(word)
+        pyperclip.copy(f' {word} ')
         self.show_toast(f'📋 คัดลอก "{word}" แล้ว')
 
     # ── Resize grip ───────────────────────────────────────────────────────────
@@ -641,19 +658,99 @@ class SpeechPanel(ctk.CTk):
     def _drag_move(self, e): self.geometry(f'+{e.x_root-self._ox}+{e.y_root-self._oy}')
 
     def _drag_end(self, e):
-        x = self.winfo_x()
-        sw = self.winfo_screenwidth()
-        w = self.winfo_width()
-        target_x = 0 if (x + w // 2) < sw // 2 else sw - w
-        self.geometry(f'+{target_x}+{self.winfo_y()}')
+        x  = self.winfo_x();  y  = self.winfo_y()
+        w  = self.winfo_width();  h = self.winfo_height()
+        sw = self.winfo_screenwidth();  sh = self.winfo_screenheight()
+        cx, cy   = x + w // 2, y + h // 2
+        d_left, d_right  = cx, sw - cx
+        d_top,  d_bottom = cy, sh - cy
+        min_d = min(d_left, d_right, d_top, d_bottom)
+        if min_d == d_left:
+            self._snap_edge = 'left';   self.geometry(f'+0+{y}')
+        elif min_d == d_right:
+            self._snap_edge = 'right';  self.geometry(f'+{sw-w}+{y}')
+        elif min_d == d_top:
+            self._snap_edge = 'top';    self.geometry(f'+{x}+0')
+        else:
+            self._snap_edge = 'bottom'; self.geometry(f'+{x}+{sh-h}')
+        self._update_collapse_btn()
 
     # ── Visibility ────────────────────────────────────────────────────────────
 
     def _toggle_visibility(self):
-        if self._visible: self.withdraw(); self._visible = False
-        else: self.deiconify(); self.lift(); self._visible = True
+        if self._visible:
+            self._visible = False
+            self.withdraw()
+        else:
+            self._destroy_edge_tab()
+            self.deiconify(); self.lift()
+            self._visible = True
+
+    def _update_collapse_btn(self):
+        arrows = {'left': '◀', 'right': '▶', 'top': '▲', 'bottom': '▼'}
+        self._collapse_btn.configure(text=arrows.get(self._snap_edge, '◀'))
+
+    def _collapse_panel(self):
+        self._show_edge_tab()
+        self._visible = False
+        self.withdraw()
+
+    def _expand_panel(self):
+        self._destroy_edge_tab()
+        self.deiconify(); self.lift()
+        self._visible = True
+
+    def _destroy_edge_tab(self):
+        if self._edge_tab:
+            try: self._edge_tab.destroy()
+            except Exception: pass
+            self._edge_tab = None
+
+    def _show_edge_tab(self):
+        self._destroy_edge_tab()
+        sw = self.winfo_screenwidth(); sh = self.winfo_screenheight()
+        px = self.winfo_x(); py = self.winfo_y()
+        pw = self.winfo_width(); ph = self.winfo_height()
+        edge   = self._snap_edge
+        arrows = {'left': '▶', 'right': '◀', 'top': '▼', 'bottom': '▲'}
+        arrow  = arrows.get(edge, '▶')
+        if edge == 'left':
+            tw, th = 22, 70
+            tx = 0
+            ty = max(0, min(py + (ph - th) // 2, sh - th))
+        elif edge == 'right':
+            tw, th = 22, 70
+            tx = sw - tw
+            ty = max(0, min(py + (ph - th) // 2, sh - th))
+        elif edge == 'top':
+            tw, th = 70, 22
+            tx = max(0, min(px + (pw - tw) // 2, sw - tw))
+            ty = 0
+        else:
+            tw, th = 70, 22
+            tx = max(0, min(px + (pw - tw) // 2, sw - tw))
+            ty = sh - th
+        tab = tk.Toplevel()
+        tab.overrideredirect(True)
+        tab.attributes('-topmost', True)
+        tab.configure(bg=C['accent'])
+        tab.geometry(f'{tw}x{th}+{tx}+{ty}')
+        lbl = tk.Label(tab, text=arrow, bg=C['accent'], fg='white',
+                       font=('Leelawadee UI', 13, 'bold'), cursor='hand2')
+        lbl.pack(fill='both', expand=True)
+        hover_job = [None]
+        def _on_enter(e=None):
+            if hover_job[0]:
+                try: tab.after_cancel(hover_job[0])
+                except Exception: pass
+            hover_job[0] = tab.after(350, self._expand_panel)
+        lbl.bind('<Button-1>', lambda e: self._expand_panel())
+        lbl.bind('<Enter>', _on_enter)
+        tab.bind('<Enter>', _on_enter)
+        self._edge_tab = tab
 
     def _quit_app(self):
+        self._destroy_edge_tab()
         try: keyboard.unhook_all()
         except Exception: pass
         self.destroy()
