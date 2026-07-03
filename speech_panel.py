@@ -350,10 +350,20 @@ class SpeechPanel(ctk.CTk):
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
+        # Lock button — leftmost, before direction buttons
+        self._lock_btn = ctk.CTkButton(
+            hdr,
+            text='🔒' if self._edge_tab_locked else '🔓',
+            width=42, height=40,
+            fg_color=C['red'] if self._edge_tab_locked else C['accent'],
+            hover_color=C['purple'],
+            font=ctk.CTkFont(size=16),
+            command=self._toggle_lock)
+        self._lock_btn.pack(side='left', padx=(0, 6))
         # 4 snap-direction buttons
         self._snap_btns = {}
         _sf = ctk.CTkFrame(hdr, fg_color='transparent')
-        _sf.pack(side='left', padx=(0, 2))
+        _sf.pack(side='left', padx=(0, 4))
         for _d, _s in [('left','◀'), ('top','▲'), ('right','▶'), ('bottom','▼')]:
             _active = _d == self._snap_edge
             _b = ctk.CTkButton(
@@ -365,23 +375,13 @@ class SpeechPanel(ctk.CTk):
                 command=lambda d=_d: self._snap_to_edge(d))
             _b.pack(side='left', padx=1)
             self._snap_btns[_d] = _b
-        # Collapse button (collapses to current snap edge)
+        # Collapse button — large, prominent icon
         self._collapse_btn = ctk.CTkButton(
-            hdr, text='ย่อ', width=42, height=36,
-            fg_color=C['card'], hover_color=C['card2'],
-            font=_f(10), text_color=C['sub'],
+            hdr, text='⊟', width=54, height=44,
+            fg_color=C['card'], hover_color=C['border'],
+            font=ctk.CTkFont(size=24), text_color=C['sub'],
             command=self._collapse_panel)
-        self._collapse_btn.pack(side='left', padx=(3, 0))
-        # Lock button (main panel)
-        self._lock_btn = ctk.CTkButton(
-            hdr,
-            text='🔒' if self._edge_tab_locked else '🔓',
-            width=40, height=36,
-            fg_color=C['red'] if self._edge_tab_locked else C['accent'],
-            hover_color=C['purple'],
-            font=ctk.CTkFont(size=14),
-            command=self._toggle_lock)
-        self._lock_btn.pack(side='left', padx=(2, 4))
+        self._collapse_btn.pack(side='left', padx=(0, 2))
         # Close (quit) button
         ctk.CTkButton(hdr, text='✕', width=50, height=44, fg_color='transparent',
                       hover_color='#b91c1c', font=ctk.CTkFont(size=20), text_color=C['sub'],
