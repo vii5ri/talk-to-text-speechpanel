@@ -1,0 +1,996 @@
+<title>Speech Panel v2 — คู่มือการใช้งาน</title>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+:root {
+  --bg:       #0f172a;
+  --surface:  #1e293b;
+  --surface2: #263347;
+  --border:   #334155;
+  --text:     #f1f5f9;
+  --sub:      #94a3b8;
+  --accent:   #3b82f6;
+  --purple:   #7c3aed;
+  --green:    #16a34a;
+  --red:      #ef4444;
+  --sidebar-w: 230px;
+  --max-content: 820px;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:       #f0f4f8;
+    --surface:  #ffffff;
+    --surface2: #e8edf3;
+    --border:   #cbd5e1;
+    --text:     #0f172a;
+    --sub:      #64748b;
+    --accent:   #2563eb;
+    --purple:   #7c3aed;
+    --green:    #15803d;
+    --red:      #dc2626;
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263347;--border:#334155;
+  --text:#f1f5f9;--sub:#94a3b8;--accent:#3b82f6;--purple:#7c3aed;
+  --green:#16a34a;--red:#ef4444;
+}
+:root[data-theme="light"] {
+  --bg:#f0f4f8;--surface:#ffffff;--surface2:#e8edf3;--border:#cbd5e1;
+  --text:#0f172a;--sub:#64748b;--accent:#2563eb;--purple:#7c3aed;
+  --green:#15803d;--red:#dc2626;
+}
+
+/* ── Reset & Base ────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 15px; scroll-behavior: smooth; }
+body {
+  font-family: "Leelawadee UI", "Leelawadee", Tahoma, "Segoe UI", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.7;
+  display: flex;
+  min-height: 100vh;
+}
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* ── Sidebar ─────────────────────────────────────────────────────────────── */
+#sidebar {
+  width: var(--sidebar-w);
+  flex-shrink: 0;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  padding: 20px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.sidebar-brand {
+  padding: 0 18px 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+.sidebar-brand .app-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--accent);
+  letter-spacing: .02em;
+}
+.sidebar-brand .app-ver {
+  font-size: .78rem;
+  color: var(--sub);
+  margin-top: 2px;
+}
+.sidebar-section-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  padding: 10px 18px 3px;
+}
+#sidebar a {
+  display: block;
+  padding: 6px 18px;
+  font-size: .88rem;
+  color: var(--sub);
+  transition: color .15s, background .15s;
+  border-left: 3px solid transparent;
+}
+#sidebar a:hover, #sidebar a.active {
+  color: var(--text);
+  background: var(--surface2);
+  border-left-color: var(--accent);
+  text-decoration: none;
+}
+
+/* ── Main ────────────────────────────────────────────────────────────────── */
+main {
+  flex: 1;
+  min-width: 0;
+  padding: 40px 48px 80px;
+  max-width: calc(var(--sidebar-w) + var(--max-content) + 96px);
+}
+
+/* ── Section ─────────────────────────────────────────────────────────────── */
+.section {
+  margin-bottom: 64px;
+  scroll-margin-top: 24px;
+}
+.section-eyebrow {
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 6px;
+}
+.section-title {
+  font-size: 1.55rem;
+  font-weight: 700;
+  color: var(--text);
+  text-wrap: balance;
+  margin-bottom: 4px;
+  line-height: 1.3;
+}
+.section-sub {
+  font-size: .9rem;
+  color: var(--sub);
+  margin-bottom: 20px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 16px;
+}
+
+/* ── Card ────────────────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin-bottom: 12px;
+}
+.card-title {
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--sub);
+  margin-bottom: 12px;
+}
+
+/* ── Button pill ─────────────────────────────────────────────────────────── */
+.btn-row {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.btn-item {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.btn-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border-radius: 7px;
+  font-size: .82rem;
+  font-weight: 600;
+  font-family: inherit;
+  white-space: nowrap;
+  cursor: default;
+  user-select: none;
+}
+.btn-blue   { background: #3b82f6; color: #fff; }
+.btn-trans  { background: transparent; border: 1px solid var(--border); color: var(--sub); }
+.btn-card   { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-red    { background: #ef4444; color: #fff; }
+.btn-red-outline { background: transparent; border: 2px solid #ef4444; color: #ef4444; }
+.btn-purple { background: #7c3aed; color: #fff; }
+.btn-green  { background: #16a34a; color: #fff; }
+.btn-desc {
+  font-size: .88rem;
+  color: var(--text);
+  padding-top: 3px;
+}
+.btn-desc .note {
+  font-size: .8rem;
+  color: var(--sub);
+  margin-top: 2px;
+}
+
+/* ── Key badge ───────────────────────────────────────────────────────────── */
+.key {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-bottom: 2px solid var(--border);
+  border-radius: 5px;
+  font-size: .82rem;
+  font-weight: 600;
+  letter-spacing: .02em;
+  color: var(--text);
+  font-family: "Courier New", monospace;
+}
+
+/* ── Mode badge ──────────────────────────────────────────────────────────── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: .78rem;
+  font-weight: 700;
+}
+.badge-blue   { background: rgba(59,130,246,.18); color: #60a5fa; border: 1px solid rgba(59,130,246,.35); }
+.badge-purple { background: rgba(124,58,237,.18); color: #a78bfa; border: 1px solid rgba(124,58,237,.35); }
+.badge-green  { background: rgba(22,163,74,.18);  color: #4ade80; border: 1px solid rgba(22,163,74,.35); }
+
+/* ── Info box ────────────────────────────────────────────────────────────── */
+.info-box {
+  padding: 12px 16px;
+  border-radius: 8px;
+  font-size: .88rem;
+  margin: 12px 0;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+.info-box.tip   { background: rgba(59,130,246,.1); border: 1px solid rgba(59,130,246,.3); }
+.info-box.warn  { background: rgba(239,68,68,.1);  border: 1px solid rgba(239,68,68,.3); }
+.info-box.ok    { background: rgba(22,163,74,.1);  border: 1px solid rgba(22,163,74,.3); }
+.info-box .icon { font-size: 1.1rem; flex-shrink: 0; margin-top: 1px; }
+
+/* ── Step list ───────────────────────────────────────────────────────────── */
+.steps { display: flex; flex-direction: column; gap: 10px; }
+.step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.step-num {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  font-size: .82rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+}
+.step-body { padding-top: 3px; }
+.step-body strong { display: block; font-size: .92rem; margin-bottom: 2px; }
+.step-body p { font-size: .85rem; color: var(--sub); }
+code {
+  font-family: "Courier New", monospace;
+  font-size: .82rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--accent);
+}
+
+/* ── App diagram ─────────────────────────────────────────────────────────── */
+.app-diagram {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  font-size: .82rem;
+  margin-bottom: 20px;
+}
+.diagram-header {
+  background: #1e293b;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: .78rem;
+}
+.dh-left  { display: flex; align-items: center; gap: 4px; flex: 1; }
+.dh-right { display: flex; align-items: center; gap: 4px; }
+.dpill {
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--sub);
+  font-size: .72rem;
+  white-space: nowrap;
+}
+.dpill.accent { background: #3b82f6; color: #fff; border-color: #3b82f6; }
+.dpill.red    { background: #ef4444; color: #fff; border-color: #ef4444; }
+.diagram-body {
+  display: grid;
+  grid-template-columns: 3fr 2fr;
+  min-height: 180px;
+}
+.diag-left {
+  border-right: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.diag-right { padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.diag-label {
+  font-size: .72rem;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  margin-bottom: 2px;
+}
+.diag-zone {
+  background: var(--surface2);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: .78rem;
+  color: var(--sub);
+  text-align: center;
+}
+.diag-zone.accent-zone {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: rgba(59,130,246,.07);
+}
+
+/* ── Hotkey table ────────────────────────────────────────────────────────── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .88rem;
+}
+th {
+  text-align: left;
+  font-size: .75rem;
+  font-weight: 700;
+  color: var(--sub);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+td:first-child { font-variant-numeric: tabular-nums; }
+
+/* ── Responsive ──────────────────────────────────────────────────────────── */
+@media (max-width: 700px) {
+  body { flex-direction: column; }
+  #sidebar { width: 100%; height: auto; position: static; flex-direction: row; flex-wrap: wrap; padding: 10px; }
+  main { padding: 24px 18px 60px; }
+  .btn-item { grid-template-columns: 1fr; }
+  .diagram-body { grid-template-columns: 1fr; }
+  .diag-left { border-right: none; border-bottom: 1px solid var(--border); }
+}
+
+/* ── Print ───────────────────────────────────────────────────────────────── */
+@media print {
+  #sidebar { display: none; }
+  main { padding: 20px; }
+  .section { page-break-inside: avoid; }
+}
+</style>
+
+<!-- Sidebar -->
+<nav id="sidebar">
+  <div class="sidebar-brand">
+    <div class="app-name">🎤 Speech Panel v2</div>
+    <div class="app-ver">คู่มือการใช้งาน</div>
+  </div>
+  <span class="sidebar-section-label">เนื้อหา</span>
+  <a href="#overview">ภาพรวม</a>
+  <a href="#header">แถบหัว (Header)</a>
+  <a href="#left">แผงซ้าย — บันทึกเสียง</a>
+  <a href="#segments">Segment Cards</a>
+  <a href="#right">แผงขวา — แปล & คำศัพท์</a>
+  <a href="#collapse">การย่อ / Edge Tab</a>
+  <a href="#settings">ตั้งค่า STT</a>
+  <a href="#hotkeys">ปุ่มลัด</a>
+  <a href="#install">ติดตั้งในเครื่องใหม่</a>
+</nav>
+
+<!-- Main content -->
+<main>
+
+<!-- ── OVERVIEW ──────────────────────────────────────────────────────────── -->
+<section class="section" id="overview">
+  <div class="section-eyebrow">เริ่มต้น</div>
+  <h1 class="section-title">ภาพรวมโปรแกรม</h1>
+  <p class="section-sub">Speech Panel v2 เป็นโปรแกรมแปลงเสียงพูดเป็นข้อความ รองรับภาษาไทยและอังกฤษ มี 3 โหมด และมีระบบแปลภาษาในตัว</p>
+
+  <!-- App diagram -->
+  <div class="app-diagram">
+    <div class="diagram-header">
+      <div class="dh-left">
+        <span style="color:var(--sub);font-size:.9rem">🎤</span>
+        <span style="color:var(--text);font-weight:700;font-size:.85rem">Speech Panel</span>
+        <span class="dpill accent">◀</span>
+        <span class="dpill">▲</span><span class="dpill">▶</span><span class="dpill">▼</span>
+        <span class="dpill">🖱</span>
+        <span class="dpill red">⊟</span>
+        <span class="dpill">Gemini ▾</span>
+        <span class="dpill accent">🤖</span>
+      </div>
+      <div class="dh-right">
+        <span class="dpill">🖼</span>
+        <span class="dpill">⚙️</span>
+        <span class="dpill">☀️</span>
+        <span class="dpill">─</span>
+        <span class="dpill">✕</span>
+      </div>
+    </div>
+    <div class="diagram-body">
+      <div class="diag-left">
+        <div class="diag-label">แผงซ้าย — บันทึกเสียง</div>
+        <div class="diag-zone">🇹🇭 ไทย  |  🇺🇸 EN &nbsp;·&nbsp; 🌐 Free · 🔌 Vosk · ☁️ Cloud</div>
+        <div class="diag-zone accent-zone" style="padding:12px">🎤 ปุ่มไมโครโฟน (กลาง)<br><small>สถานะ ← &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; → ตัวเลขนับถอยหลัง</small></div>
+        <div class="diag-zone">📋 ทั้งหมด &nbsp;|&nbsp; 📋 ที่เลือก &nbsp;|&nbsp; 🗑</div>
+        <div class="diag-zone">🖼 Image to Text &nbsp;|&nbsp; 💬 Talk to Text</div>
+        <div class="diag-zone" style="flex:1">📝 Segment Cards (ข้อความที่บันทึกได้)</div>
+      </div>
+      <div class="diag-right">
+        <div class="diag-label">แผงขวา</div>
+        <div class="diag-zone" style="flex:1">📄 กล่องรวมข้อความ</div>
+        <div class="diag-zone">📚 คำศัพท์ — คลิกเพื่อ Copy</div>
+        <div class="diag-zone">🔄 แปลภาษา TH→EN / EN→TH</div>
+        <div class="diag-zone">📝 คำแปล</div>
+        <div class="diag-zone">🔍 Cross-check (แปลกลับ)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">3 โหมด STT</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="badge badge-blue">🌐 Free</span>
+        <div class="btn-desc">ใช้ Google Speech (ออนไลน์) อัดเสียงแล้วส่ง — ไม่มีค่าใช้จ่าย แต่ต้องรอหลังหยุดพูด<div class="note">เหมาะกับ: ผู้ใช้ทั่วไปที่มีอินเทอร์เน็ต</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="badge badge-purple">🔌 Vosk</span>
+        <div class="btn-desc">ออฟไลน์ 100% — ประมวลผลในเครื่อง เห็นข้อความแบบ real-time ขณะพูด<div class="note">ต้องดาวน์โหลด Vosk Thai model ก่อน → ตั้งค่าใน ⚙️</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="badge badge-green">☁️ Cloud</span>
+        <div class="btn-desc">Google Cloud STT — คุณภาพสูงสุด real-time ใช้ฟรี 60 นาที/เดือน<div class="note">ต้องมี Google Cloud Service Account JSON → ตั้งค่าใน ⚙️</div></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── HEADER ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="header">
+  <div class="section-eyebrow">แถบบน</div>
+  <h2 class="section-title">Header Bar — แถบหัวโปรแกรม</h2>
+  <p class="section-sub">ลากที่แถบนี้เพื่อย้ายตำแหน่งโปรแกรม · ปุ่มซ้ายควบคุมการย่อ/ตำแหน่ง · ปุ่มขวาควบคุมหน้าต่าง</p>
+
+  <div class="card">
+    <div class="card-title">ปุ่มฝั่งซ้าย (ซ้ายไปขวา)</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">🔓</span>
+        <div class="btn-desc"><strong>ปุ่มล็อค (Lock Panel)</strong><br>ล็อคป้องกันโปรแกรมย่อตัวอัตโนมัติ เมื่อล็อคอยู่จะแสดง 🔒 สีแดง เมื่อไม่ล็อคแสดง 🔓 สีน้ำเงิน<div class="note">ใช้เมื่อเล่นเกมหรือดูคลิป — ป้องกันโปรแกรมหายไปเมื่อเมาส์ออกนอก</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue">◀</span>
+        <div class="btn-desc"><strong>ปุ่มติดขอบ (Snap)</strong> — ◀ ▲ ▶ ▼<br>กดเพื่อดันโปรแกรมติดขอบจอด้านนั้น โปรแกรมจะจำขอบที่เลือกและ Tab ย่อจะปรากฏที่ขอบเดียวกัน ปุ่มที่ Active จะเป็นสีน้ำเงิน<div class="note">ลากโปรแกรมไปด้านอื่นก็อัปเดตปุ่มให้โดยอัตโนมัติ</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card">🖱</span>
+        <div class="btn-desc"><strong>Auto-collapse Toggle</strong><br>เปิด/ปิดการย่ออัตโนมัติเมื่อเมาส์ออกนอกโปรแกรม เมื่อเปิดอยู่ปุ่ม ⊟ จะเปลี่ยนเป็นสีฟ้า เมื่อปิดอยู่ปุ่ม ⊟ จะเป็นสีแดง<div class="note">กด 🖱 แล้วกด 🔓 ร่วมกันเพื่อล็อคไม่ให้ย่อเลย</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-red">⊟</span>
+        <div class="btn-desc"><strong>ปุ่มย่อ (Collapse)</strong><br>ย่อโปรแกรมทันทีเป็น Tab เล็กที่ขอบจอ กดหรือ hover Tab เพื่อขยายกลับ<div class="note"><span style="color:#ef4444">● สีแดง</span> = Auto-collapse ปิดอยู่ &nbsp;|&nbsp; <span style="color:#3b82f6">● สีน้ำเงิน</span> = Auto-collapse เปิดอยู่</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ส่วนกลาง — เปิด AI Chat</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <div style="display:flex;gap:6px;align-items:center">
+          <span class="btn-pill btn-card" style="font-size:.78rem">Gemini ▾</span>
+        </div>
+        <div class="btn-desc"><strong>เลือก AI Chat</strong><br>เลือก: ChatGPT · Gemini · Claude · Perplexity · Grok · Meta AI · Manus<div class="note">Default คือ Gemini</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue">🤖</span>
+        <div class="btn-desc"><strong>เปิด AI Chat</strong><br>เปิดเว็บไซต์ของ AI ที่เลือกในเบราว์เซอร์ เพื่อนำข้อความที่ได้จากการพูดไปถามต่อ</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ปุ่มฝั่งขวา (ขวาไปซ้าย)</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">✕</span>
+        <div class="btn-desc"><strong>ปิดโปรแกรม</strong> — ปิดและออกจากโปรแกรมทั้งหมด</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">─</span>
+        <div class="btn-desc"><strong>ซ่อน / Minimize</strong><br>ซ่อนหน้าต่างทั้งหมด กด <span class="key">Ctrl+Shift+Space</span> เพื่อเรียกคืน</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">☀️</span>
+        <div class="btn-desc"><strong>เปลี่ยนธีม</strong> — สลับระหว่าง Dark Mode (มืด) และ Light Mode (สว่าง) การตั้งค่าจะถูกจำไว้</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">⚙️</span>
+        <div class="btn-desc"><strong>ตั้งค่า STT</strong><br>ตั้งค่า Vosk model path และ Google Cloud credentials<div class="note">กดแล้วจะมีหน้าต่างตั้งค่าขึ้นมา</div></div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-trans">🖼</span>
+        <div class="btn-desc"><strong>Image to Text Tool</strong><br>เปิดเว็บ image-to-type-helper เพื่อแปลงรูปภาพเป็นข้อความ</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── LEFT PANEL ─────────────────────────────────────────────────────────── -->
+<section class="section" id="left">
+  <div class="section-eyebrow">แผงซ้าย</div>
+  <h2 class="section-title">บันทึกเสียง</h2>
+  <p class="section-sub">ส่วนหลักของโปรแกรม — เลือกภาษา เลือกโหมด แล้วกดไมโครโฟน</p>
+
+  <div class="card">
+    <div class="card-title">เลือกภาษาและโหมด</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <div style="display:flex;gap:6px">
+          <span class="btn-pill btn-blue" style="font-size:.78rem">🇹🇭 ไทย</span>
+          <span class="btn-pill btn-card" style="font-size:.78rem">🇺🇸 EN</span>
+        </div>
+        <div class="btn-desc"><strong>ภาษาที่พูด</strong><br>เลือกให้ตรงกับภาษาที่จะพูด ถ้าเลือกผิดผลลัพธ์จะไม่ถูกต้อง</div>
+      </div>
+      <div class="btn-item">
+        <div style="display:flex;gap:4px;flex-wrap:wrap">
+          <span class="badge badge-blue">🌐 Free</span>
+          <span class="badge badge-purple">🔌 Vosk</span>
+          <span class="badge badge-green">☁️ Cloud</span>
+        </div>
+        <div class="btn-desc"><strong>โหมด STT</strong><br>Free = ออนไลน์ฟรี · Vosk = ออฟไลน์ · Cloud = Google Cloud คุณภาพสูง</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">พื้นที่ไมโครโฟน</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">🟢 กำลังอัด…</span>
+        <div class="btn-desc"><strong>แสดงสถานะ (ซ้ายของไมโครโฟน)</strong><br>บอกสถานะปัจจุบัน เช่น "กดปุ่มหรือ Space เพื่อเริ่มพูด" / "🔴 กำลังอัด…" / "กำลังประมวลผล…"</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="padding:10px 14px;font-size:1.1rem;border-radius:50%">🎤</span>
+        <div class="btn-desc"><strong>ปุ่มไมโครโฟน (กลาง)</strong><br>กดเพื่อเริ่มอัดเสียง กดอีกครั้งเพื่อหยุด หรือกด <span class="key">Space</span> ก็ได้ เมื่ออัดอยู่ปุ่มจะเปลี่ยนสี</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.85rem;font-variant-numeric:tabular-nums">0:42</span>
+        <div class="btn-desc"><strong>ตัวนับเวลา (ขวาของไมโครโฟน)</strong><br>แสดงเวลาที่อัดเสียงมาแล้วเป็นนาที:วินาที</div>
+      </div>
+    </div>
+    <div class="info-box tip" style="margin-top:10px">
+      <span class="icon">💡</span>
+      <span>เมื่อใช้โหมด <strong>Vosk</strong> หรือ <strong>Cloud</strong> จะมีกล่องข้อความสีฟ้าแสดง "Live Preview" ขึ้นมาให้เห็นข้อความแบบ real-time ขณะพูด — กล่องนี้จะหายไปเองเมื่อไม่มีเสียง</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">แถบปุ่มด้านล่างไมโครโฟน</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">📋 ทั้งหมด</span>
+        <div class="btn-desc"><strong>Copy ข้อความทั้งหมด</strong><br>รวมทุก Segment และ copy ไปยัง Clipboard พร้อมกัน</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">📋 ที่เลือก</span>
+        <div class="btn-desc"><strong>Copy เฉพาะที่ติ๊กเลือก</strong><br>ใช้ Checkbox ในแต่ละ Segment แล้วกดปุ่มนี้เพื่อ copy เฉพาะที่ต้องการ</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-red" style="font-size:1rem;padding:8px 12px">🗑</span>
+        <div class="btn-desc"><strong>ล้างทั้งหมด</strong><br>ลบทุก Segment ออกทั้งหมด (ไม่สามารถ Undo ได้)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">ปุ่ม Web Tools</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">🖼 Image to Text</span>
+        <div class="btn-desc">เปิดเว็บ image-to-type-helper ในเบราว์เซอร์ — ใช้แปลงภาพหน้าจอเป็นข้อความ</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">💬 Talk to Text</span>
+        <div class="btn-desc">เปิดเว็บ talk-to-text-thai — เวอร์ชันเว็บแบบเบา สำหรับใช้งานบนมือถือหรือเมื่อไม่ได้ติดตั้งโปรแกรม</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SEGMENT CARDS ───────────────────────────────────────────────────────── -->
+<section class="section" id="segments">
+  <div class="section-eyebrow">แผงซ้าย</div>
+  <h2 class="section-title">Segment Cards — บัตรข้อความ</h2>
+  <p class="section-sub">ทุกครั้งที่หยุดพูดโปรแกรมจะสร้าง Card ใหม่ 1 ใบ แสดงข้อความนั้น Card สามารถแก้ไข copy ลบ และจัดเรียงได้</p>
+
+  <div class="card">
+    <div class="card-title">ปุ่มใน Segment Card แต่ละใบ</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">☐ เลือก</span>
+        <div class="btn-desc"><strong>Checkbox</strong><br>ติ๊กเพื่อเลือก Card นี้ ใช้ร่วมกับปุ่ม "📋 ที่เลือก" ด้านบน เพื่อ copy เฉพาะบาง Card</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">✏️ แก้ไข</span>
+        <div class="btn-desc"><strong>แก้ไขข้อความ</strong><br>คลิกเพื่อเปิดกล่องแก้ไขข้อความใน Card นั้น แก้แล้วกด บันทึก</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">📋 Copy</span>
+        <div class="btn-desc"><strong>Copy Card นี้</strong><br>copy ข้อความใน Card นี้อย่างเดียวไปยัง Clipboard</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">▲ ขึ้น</span>
+        <div class="btn-desc"><strong>เลื่อนขึ้น</strong> — เลื่อน Card นี้ขึ้นหนึ่งตำแหน่งในรายการ</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">▼ ลง</span>
+        <div class="btn-desc"><strong>เลื่อนลง</strong> — เลื่อน Card นี้ลงหนึ่งตำแหน่งในรายการ</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-red" style="font-size:.78rem">🗑 ลบ</span>
+        <div class="btn-desc"><strong>ลบ Card นี้</strong> — ลบเฉพาะ Card นี้ ไม่กระทบ Card อื่น</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── RIGHT PANEL ────────────────────────────────────────────────────────── -->
+<section class="section" id="right">
+  <div class="section-eyebrow">แผงขวา</div>
+  <h2 class="section-title">แปลภาษา & คำศัพท์</h2>
+  <p class="section-sub">แผงขวาแสดงข้อความรวม คำศัพท์ที่บันทึกไว้ และระบบแปลภาษา</p>
+
+  <div class="card">
+    <div class="card-title">📄 กล่องรวมข้อความ</div>
+    <p style="font-size:.88rem;color:var(--sub);margin-bottom:10px">แสดงข้อความทั้งหมดจากทุก Segment รวมกัน อัปเดตอัตโนมัติทุกครั้งที่มี Segment ใหม่ สามารถแก้ไขข้อความโดยตรงในกล่องนี้ได้</p>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">📋 Copy กล่องรวม</span>
+        <div class="btn-desc">Copy ข้อความทั้งหมดในกล่องรวมไปยัง Clipboard ด้วยปุ่มเดียว</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📚 คำศัพท์</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">+ เพิ่มคำ</span>
+        <div class="btn-desc"><strong>เพิ่มคำศัพท์</strong><br>บันทึกคำหรือวลีที่ใช้บ่อย เช่น ชื่อเฉพาะ คำศัพท์เทคนิค กดเพิ่มแล้วพิมพ์คำที่ต้องการ</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-card" style="font-size:.78rem">[ คำศัพท์ ]</span>
+        <div class="btn-desc"><strong>คลิกคำเพื่อ Copy</strong><br>กดที่คำใดก็ได้เพื่อ copy คำนั้นไปยัง Clipboard พร้อม Space ด้านหน้าและหลัง เพื่อวางต่อท้ายข้อความได้ทันที<div class="note">กด Right-click ที่คำเพื่อลบคำนั้นออก</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🔄 แปลภาษา</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <div style="display:flex;gap:4px">
+          <span class="btn-pill btn-blue" style="font-size:.78rem">TH→EN</span>
+          <span class="btn-pill btn-card" style="font-size:.78rem">EN→TH</span>
+        </div>
+        <div class="btn-desc"><strong>เลือกทิศทางแปล</strong><br>ไทย→อังกฤษ หรือ อังกฤษ→ไทย</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue" style="font-size:.78rem">แปล</span>
+        <div class="btn-desc"><strong>แปลข้อความ</strong><br>รับข้อความจากกล่องรวม แปลด้วย Google Translate และแสดงผลใน "📝 คำแปล"</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-size:.85rem"><strong>📝 คำแปล</strong> — แสดงผลการแปลภาษา</div>
+      <div style="display:flex;gap:6px">
+        <span class="btn-pill btn-card" style="font-size:.75rem">📋 Copy คำแปล</span>
+        <span class="btn-pill btn-card" style="font-size:.75rem">🗑 ล้าง</span>
+      </div>
+      <div style="font-size:.85rem;margin-top:6px"><strong>🔍 Cross-check (แปลกลับ)</strong> — แปลผลลัพธ์กลับเป็นภาษาเดิมเพื่อตรวจสอบความถูกต้อง</div>
+      <div style="display:flex;gap:6px">
+        <span class="btn-pill btn-card" style="font-size:.75rem">📋 Copy Cross-check</span>
+        <span class="btn-pill btn-card" style="font-size:.75rem">🗑 ล้าง</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── COLLAPSE ────────────────────────────────────────────────────────────── -->
+<section class="section" id="collapse">
+  <div class="section-eyebrow">ฟีเจอร์</div>
+  <h2 class="section-title">การย่อโปรแกรม / Edge Tab</h2>
+  <p class="section-sub">โปรแกรมสามารถย่อเป็นแท็บเล็กติดขอบจอ เพื่อประหยัดพื้นที่ขณะเล่นเกมหรือทำงาน</p>
+
+  <div class="card">
+    <div class="card-title">วิธีการทำงาน</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>เลือกขอบที่ต้องการ</strong>
+          <p>กดปุ่ม ◀ ▲ ▶ ▼ ใน Header เพื่อเลือกว่าโปรแกรมจะติดขอบไหนของจอ หรือลากโปรแกรมไปใกล้ขอบแล้วปล่อย</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>กดปุ่ม ⊟ เพื่อย่อ</strong>
+          <p>โปรแกรมจะหายไปและมีแท็บเล็กๆ ปรากฏที่ขอบจอ</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>Hover เมาส์ที่แท็บเพื่อขยาย</strong>
+          <p>นำเมาส์ไปชี้ที่แท็บขอบจอ โปรแกรมจะขยายออกมาทันที มีพื้นที่ Hover ล่องหน 150px รอบแท็บเพื่อจับเมาส์ได้ง่ายขึ้น</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">โหมดการย่ออัตโนมัติ</div>
+    <div class="btn-row">
+      <div class="btn-item">
+        <span class="btn-pill btn-card">🖱 ปิด</span>
+        <div class="btn-desc">เมาส์ออกนอกโปรแกรม <strong>ไม่ย่อ</strong> — ต้องกด ⊟ เองเท่านั้น</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-blue">🖱 เปิด</span>
+        <div class="btn-desc">เมาส์ออกนอกโปรแกรม <strong>ย่อเองอัตโนมัติ</strong> — สะดวกขณะใช้งานสลับกับโปรแกรมอื่น</div>
+      </div>
+      <div class="btn-item">
+        <span class="btn-pill btn-red">🔒 ล็อค</span>
+        <div class="btn-desc">ล็อคป้องกันการย่อทุกรูปแบบ — แม้กด ⊟ ก็ไม่ย่อ ใช้เมื่อต้องการให้โปรแกรมค้างหน้าจอตลอด</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SETTINGS ────────────────────────────────────────────────────────────── -->
+<section class="section" id="settings">
+  <div class="section-eyebrow">ตั้งค่า</div>
+  <h2 class="section-title">หน้าต่างตั้งค่า STT</h2>
+  <p class="section-sub">กด ⚙️ ในแถบหัวเพื่อเปิด — ใช้ตั้งค่าโหมด Vosk และ Google Cloud</p>
+
+  <div class="card">
+    <div class="card-title">🔌 Vosk — ออฟไลน์ Real-time</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>ดาวน์โหลด Vosk Thai Model</strong>
+          <p>ไปที่ <code>alphacephei.com/vosk/models</code> แล้วดาวน์โหลด <code>vosk-model-small-th-0.15</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>แตก zip แล้วจำ path ของโฟลเดอร์</strong>
+          <p>เช่น <code>C:\vosk-model-small-th-0.15</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>กด "เลือก Folder" ใน ⚙️</strong>
+          <p>เลือก folder ที่แตกไว้ แล้วกด บันทึก — จากนั้นเลือกโหมด 🔌 Vosk ใช้งานได้เลย</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">☁️ Google Cloud STT — คุณภาพสูง</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>สร้าง Google Cloud Project</strong>
+          <p>ไปที่ console.cloud.google.com → สร้าง Project → เปิดใช้งาน Cloud Speech-to-Text API</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>สร้าง Service Account</strong>
+          <p>IAM & Admin → Service Accounts → สร้างใหม่ → ดาวน์โหลด JSON key</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>กด "เลือก File" ใน ⚙️</strong>
+          <p>เลือกไฟล์ JSON ที่ดาวน์โหลด แล้วกด บันทึก — ฟรี 60 นาที/เดือน</p>
+        </div>
+      </div>
+    </div>
+    <div class="info-box warn" style="margin-top:12px">
+      <span class="icon">⚠️</span>
+      <span>ไฟล์ JSON คือ "กุญแจ" เข้า Google Cloud ของคุณ <strong>อย่าแชร์หรือ upload ขึ้น GitHub</strong></span>
+    </div>
+  </div>
+</section>
+
+<!-- ── HOTKEYS ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="hotkeys">
+  <div class="section-eyebrow">คีย์ลัด</div>
+  <h2 class="section-title">ปุ่มลัด (Keyboard Shortcuts)</h2>
+  <p class="section-sub">ใช้ได้ทั้งขณะโปรแกรมเปิดอยู่และขณะซ่อนอยู่ใน System Tray</p>
+
+  <div class="card" style="padding:0;overflow:hidden">
+    <table>
+      <thead>
+        <tr>
+          <th>ปุ่มลัด</th>
+          <th>ทำงานอะไร</th>
+          <th>หมายเหตุ</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="key">Ctrl</span> + <span class="key">Shift</span> + <span class="key">Space</span></td>
+          <td>แสดง / ซ่อน หน้าต่าง</td>
+          <td style="color:var(--sub);font-size:.83rem">ใช้ได้ตลอด แม้โปรแกรมจะถูกซ่อนด้วยปุ่ม ─</td>
+        </tr>
+        <tr>
+          <td><span class="key">Space</span></td>
+          <td>เริ่ม / หยุด อัดเสียง</td>
+          <td style="color:var(--sub);font-size:.83rem">ใช้ได้เมื่อหน้าต่างโปรแกรม Active อยู่</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="info-box tip">
+    <span class="icon">💡</span>
+    <span>ถ้าโปรแกรมถูกย่อเป็น Edge Tab ให้ hover เมาส์ที่แท็บเพื่อขยายก่อน จากนั้น <span class="key">Space</span> ค่อยใช้งานได้</span>
+  </div>
+</section>
+
+<!-- ── INSTALL ─────────────────────────────────────────────────────────────── -->
+<section class="section" id="install">
+  <div class="section-eyebrow">การติดตั้ง</div>
+  <h2 class="section-title">ติดตั้งในเครื่องใหม่</h2>
+  <p class="section-sub">มี 2 วิธี — แบบ .exe ไม่ต้องติดตั้ง Python, แบบ Python ต้องติดตั้งก่อน</p>
+
+  <div class="card">
+    <div class="card-title" style="color:var(--accent)">⭐ วิธีที่ 1: แบบ .exe (แนะนำ) — ไม่ต้องติดตั้ง Python</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>Build ในเครื่องที่ติดตั้งโปรแกรมแล้ว</strong>
+          <p>ดับเบิลคลิก <code>build.bat</code> ในโฟลเดอร์โปรแกรม รอจนเสร็จ (ใช้เวลาประมาณ 2-5 นาที)</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Zip โฟลเดอร์ที่ได้</strong>
+          <p>จะมีโฟลเดอร์ <code>dist\SpeechPanel\</code> สร้างขึ้น — คลิกขวา → Compress to ZIP</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>ส่ง ZIP ไปยังเครื่องใหม่</strong>
+          <p>ผ่าน USB, Google Drive, หรือ LINE — แตก ZIP แล้วดับเบิลคลิก <code>SpeechPanel.exe</code> ได้เลย</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>ตั้งค่าครั้งแรก (เครื่องใหม่)</strong>
+          <p>กด ⚙️ เพื่อตั้งค่า Vosk path หรือ Google Cloud credentials ถ้าต้องการใช้โหมดนั้น</p>
+        </div>
+      </div>
+    </div>
+    <div class="info-box ok" style="margin-top:12px">
+      <span class="icon">✅</span>
+      <span>เครื่องปลายทาง <strong>ไม่ต้องติดตั้ง Python, pip, หรือ package ใดๆ</strong> ทั้งสิ้น</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">วิธีที่ 2: แบบ Python (สำหรับนักพัฒนา)</div>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <div class="step-body">
+          <strong>ติดตั้ง Python 3.11+</strong>
+          <p>ดาวน์โหลดจาก <code>python.org</code> — เลือก "Add Python to PATH" ขณะติดตั้ง</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <div class="step-body">
+          <strong>Copy โฟลเดอร์โปรแกรมทั้งหมด</strong>
+          <p>รวมถึง <code>speech_panel.py</code>, <code>speech_panel.ico</code>, <code>requirements.txt</code></p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <div class="step-body">
+          <strong>ดับเบิลคลิก <code>install.bat</code></strong>
+          <p>รอจนติดตั้ง package ทั้งหมดเสร็จ (ต้องมีอินเทอร์เน็ต)</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">4</div>
+        <div class="step-body">
+          <strong>ดับเบิลคลิก <code>start_speech_panel.bat</code></strong>
+          <p>เพื่อเปิดโปรแกรม</p>
+        </div>
+      </div>
+      <div class="step">
+        <div class="step-num">5</div>
+        <div class="step-body">
+          <strong>สร้าง Shortcut เพื่อ Pin ใน Start Menu</strong>
+          <p>คลิกขวาที่ <code>start_speech_panel.bat</code> → Create Shortcut → ลาก Shortcut ไปวางใน <code>C:\ProgramData\Microsoft\Windows\Start Menu\Programs\</code> แล้ว Pin ได้เลย</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">เปิดตอน Windows เริ่มต้น (Auto-start)</div>
+    <p style="font-size:.88rem;color:var(--sub)">กด ⚙️ ในแถบหัว → จะมีตัวเลือก "เปิดอัตโนมัติตอน Windows เริ่มต้น" — เปิดไว้โปรแกรมจะรันทุกครั้งที่เปิดเครื่อง ไม่ต้องกดเปิดเอง</p>
+  </div>
+</section>
+
+</main>
+
+<script>
+// Active sidebar link on scroll
+const sections = document.querySelectorAll('.section');
+const navLinks = document.querySelectorAll('#sidebar a');
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const active = document.querySelector(`#sidebar a[href="#${e.target.id}"]`);
+      if (active) active.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -75% 0px' });
+sections.forEach(s => observer.observe(s));
+</script>
