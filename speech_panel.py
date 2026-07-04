@@ -362,8 +362,8 @@ class SpeechPanel(ctk.CTk):
         self._snap_edge       = 'left'
         self._edge_tab        = None
         self._edge_tab_hover  = None
-        self._edge_tab_locked = False
-        self._auto_collapse   = False
+        self._edge_tab_locked = self._cfg.get('locked', True)   # default: locked (🔒 red)
+        self._auto_collapse   = self._cfg.get('auto_collapse', False)
         self._leave_job       = None
 
         self._init_window()
@@ -802,6 +802,8 @@ class SpeechPanel(ctk.CTk):
 
     def _toggle_lock(self):
         self._edge_tab_locked = not self._edge_tab_locked
+        self._cfg['locked'] = self._edge_tab_locked
+        _save_cfg(self._cfg)
         self._update_lock_btn()
 
     def _update_lock_btn(self):
@@ -812,6 +814,8 @@ class SpeechPanel(ctk.CTk):
 
     def _toggle_auto_collapse(self):
         self._auto_collapse = not self._auto_collapse
+        self._cfg['auto_collapse'] = self._auto_collapse
+        _save_cfg(self._cfg)
         self._update_auto_collapse_btn()
         if self._auto_collapse and self._visible:
             self._monitor_leave()
@@ -829,7 +833,7 @@ class SpeechPanel(ctk.CTk):
             try: self.after_cancel(self._leave_job)
             except Exception: pass
             self._leave_job = None
-        if not self._auto_collapse or not self._visible:
+        if not self._auto_collapse or not self._visible or self._edge_tab_locked:
             return
         mx, my = self.winfo_pointerxy()
         wx, wy = self.winfo_x(), self.winfo_y()
