@@ -1,34 +1,42 @@
 @echo off
-chcp 65001 >nul
 echo ================================================
-echo   สร้าง SpeechPanel.exe (PyInstaller)
+echo   BUILD SpeechPanel.exe
 echo ================================================
 echo.
 
-REM ── ตรวจสอบ PyInstaller ──────────────────────────────────────────────────────
+REM Check if PyInstaller is installed
 where pyinstaller >nul 2>nul
 if %ERRORLEVEL% NEQ 0 (
-    echo [ติดตั้ง] PyInstaller ไม่พบ — กำลังติดตั้ง...
+    echo [INSTALLING] PyInstaller not found. Installing now...
     pip install pyinstaller
     if %ERRORLEVEL% NEQ 0 (
-        echo [ผิดพลาด] ติดตั้ง PyInstaller ไม่สำเร็จ กรุณาตรวจสอบ Python และ pip
-        pause & exit /b 1
+        echo.
+        echo [ERROR] Could not install PyInstaller.
+        echo         Please make sure Python and pip are installed correctly.
+        echo.
+        pause
+        exit /b 1
     )
+    echo [OK] PyInstaller installed.
+    echo.
 )
 
-REM ── Build ─────────────────────────────────────────────────────────────────────
-echo [Build] กำลังสร้าง exe...
+REM Build the exe
+echo [BUILDING] Creating SpeechPanel.exe ... (this may take 2-5 minutes)
+echo.
 pyinstaller SpeechPanel.spec --noconfirm
 if %ERRORLEVEL% NEQ 0 (
     echo.
-    echo [ผิดพลาด] Build ไม่สำเร็จ ดูข้อความข้างบนเพื่อหาสาเหตุ
-    pause & exit /b 1
+    echo [ERROR] Build failed. See messages above for details.
+    echo.
+    pause
+    exit /b 1
 )
 
-REM ── Copy คู่มือและ README ──────────────────────────────────────────────────────
+REM Copy manual and readme into the output folder
 if exist "speech_manual.html" (
     copy /Y "speech_manual.html" "dist\SpeechPanel\" >nul
-    echo [Copy] คัดลอก speech_manual.html ไปยัง dist\SpeechPanel\
+    echo [COPY] Copied speech_manual.html to dist\SpeechPanel\
 )
 if exist "README.md" (
     copy /Y "README.md" "dist\SpeechPanel\" >nul
@@ -36,14 +44,22 @@ if exist "README.md" (
 
 echo.
 echo ================================================
-echo   Build สำเร็จ!
-echo   ไฟล์ทั้งหมดอยู่ใน:  dist\SpeechPanel\
+echo   BUILD COMPLETE!
 echo.
-echo   วิธีแจกจ่าย:
-echo   1. Zip โฟลเดอร์ dist\SpeechPanel\ ทั้งโฟลเดอร์
-echo   2. ส่ง zip ให้เครื่องอื่น
-echo   3. แตก zip แล้วดับเบิลคลิก SpeechPanel.exe
-echo   (ไม่ต้องติดตั้ง Python หรือ pip ในเครื่องปลายทาง)
+echo   Output folder:  dist\SpeechPanel\
+echo.
+echo   TO SHARE with another PC:
+echo   1. Open the folder:  dist\SpeechPanel\
+echo   2. Right-click it -> Send to -> Compressed (zip)
+echo   3. Send the zip file to the other PC
+echo   4. On the other PC: Extract zip, then
+echo      double-click SpeechPanel.exe to run.
+echo.
+echo   NOTE: The other PC does NOT need Python installed.
 echo ================================================
 echo.
-pause
+echo Press any key to open the output folder...
+pause >nul
+if exist "dist\SpeechPanel\" (
+    explorer "dist\SpeechPanel\"
+)
