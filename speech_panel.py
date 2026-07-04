@@ -480,24 +480,29 @@ class SpeechPanel(ctk.CTk):
         self._mode_seg.set(mode_map.get(self._mode,'🌐 Free'))
         self._mode_seg.pack(side='right')
 
-        # Mic zone — mic LEFT, status/timer info RIGHT
+        # Mic zone — info LEFT | mic CENTER | (balance) RIGHT
         mz = ctk.CTkFrame(left, fg_color=C['bg'])
         mz.pack(fill='x', padx=4, pady=(2,0))
-        self._mic_btn = ctk.CTkButton(
-            mz, text='🎤', width=72, height=72, font=ctk.CTkFont(size=30),
-            fg_color=C['accent'], hover_color=C['purple'],
-            corner_radius=36, command=self._toggle_rec)
-        self._mic_btn.pack(side='left', padx=(0,10), pady=4)
+        mz.grid_columnconfigure(0, weight=1)   # info column, flexible
+        mz.grid_columnconfigure(1, weight=0)   # mic button, fixed
+        mz.grid_columnconfigure(2, weight=1)   # empty balance column
+
         _info = ctk.CTkFrame(mz, fg_color='transparent')
-        _info.pack(side='left', fill='both', expand=True)
+        _info.grid(row=0, column=0, sticky='nsew', padx=(0,6), pady=4)
         self._status_lbl = ctk.CTkLabel(_info, text='กดปุ่มหรือ Space เพื่อเริ่มพูด',
                                          font=_f(11), text_color=C['sub'],
-                                         wraplength=390, justify='left')
-        self._status_lbl.pack(anchor='w', pady=(6,2))
+                                         wraplength=200, justify='left')
+        self._status_lbl.pack(anchor='w', pady=(4,2))
         self._timer_lbl = ctk.CTkLabel(_info, text='', font=_f(14,'bold'), text_color=C['accent'])
         self._timer_lbl.pack(anchor='w')
         self._replace_hint = ctk.CTkLabel(_info, text='', font=_f(10), text_color=C['purple'])
         self._replace_hint.pack(anchor='w', pady=(1,0))
+
+        self._mic_btn = ctk.CTkButton(
+            mz, text='🎤', width=72, height=72, font=ctk.CTkFont(size=30),
+            fg_color=C['accent'], hover_color=C['purple'],
+            corner_radius=36, command=self._toggle_rec)
+        self._mic_btn.grid(row=0, column=1, pady=6)
 
         # Live preview — hidden by default, auto-shows during real-time STT
         self._partial_tb = ctk.CTkTextbox(
@@ -517,7 +522,7 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(act, text='📋 ที่เลือก', height=26, font=_f(11),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
                       command=self._copy_selected).pack(side='left', fill='x', expand=True, padx=(0,2))
-        ctk.CTkButton(act, text='🗑', height=44, width=66, font=ctk.CTkFont(size=26),
+        ctk.CTkButton(act, text='🗑', height=48, width=80, font=ctk.CTkFont(size=30),
                       fg_color=C['card'], hover_color='#b91c1c',
                       command=self._clear_all).pack(side='right')
 
