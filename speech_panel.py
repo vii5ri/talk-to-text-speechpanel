@@ -7,6 +7,7 @@ Modes: 🌐 Free | 🔌 Vosk (offline real-time) | ☁️ Google Cloud (real-tim
 """
 import threading, io, wave, time, json, queue as queuelib
 import os, sys, winreg, subprocess, webbrowser
+import datetime, traceback, ctypes
 import tkinter as tk
 from tkinter import messagebox, filedialog
 import customtkinter as ctk
@@ -44,9 +45,49 @@ AI_CHATS   = {
 # ── Config ────────────────────────────────────────────────────────────────────
 _BASE = os.path.dirname(os.path.abspath(
     sys.executable if getattr(sys, 'frozen', False) else __file__))
-_CFG  = os.path.join(_BASE, 'speech_panel_config.json')
+_CFG       = os.path.join(_BASE, 'speech_panel_config.json')
 _ICON_FILE = os.path.join(_BASE, 'speech_panel.ico')
-VERSION = '2.0'
+_LOG_FILE  = os.path.join(_BASE, 'speech_panel_crash.log')
+VERSION    = '2.0'
+
+# ── Single-instance guard ──────────────────────────────────────────────────────
+_MUTEX_NAME = 'SpeechPanel_SingleInstance_v2'
+_mutex_handle = None  # keep reference alive for process lifetime
+
+def _ensure_single_instance():
+    global _mutex_handle
+    _mutex_handle = ctypes.windll.kernel32.CreateMutexW(None, False, _MUTEX_NAME)
+    if ctypes.windll.kernel32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+        messagebox.showinfo('Speech Panel', 'Speech Panel เปิดอยู่แล้ว\nดูที่ System Tray หรือกด Ctrl+Shift+Space')
+        sys.exit(0)
+
+# ── Crash logger ──────────────────────────────────────────────────────────────
+
+def _write_crash_log(exc_type, exc_value, exc_tb):
+    ts  = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    msg = ''.join(traceback.format_exception(exc_type, exc_value, exc_tb))
+    entry = f'\n{"="*60}\n[{ts}]\n{msg}\n'
+    try:
+        with open(_LOG_FILE, 'a', encoding='utf-8') as f:
+            f.write(entry)
+    except Exception:
+        pass
+
+def _setup_crash_handler():
+    def _excepthook(exc_type, exc_value, exc_tb):
+        if issubclass(exc_type, KeyboardInterrupt):
+            sys.__excepthook__(exc_type, exc_value, exc_tb)
+            return
+        _write_crash_log(exc_type, exc_value, exc_tb)
+        try:
+            messagebox.showerror(
+                'Speech Panel — พบข้อผิดพลาด',
+                f'โปรแกรมปิดตัวเนื่องจาก:\n'
+                f'{exc_type.__name__}: {exc_value}\n\n'
+                f'บันทึกรายละเอียดไว้ที่:\n{_LOG_FILE}')
+        except Exception:
+            pass
+    sys.excepthook = _excepthook
 
 def _load_cfg() -> dict:
     try:
@@ -1225,8 +1266,26 @@ class SpeechPanel(ctk.CTk):
             if isinstance(w, Toast): w.destroy()
         Toast(self, msg, kind)
 
+    def report_callback_exception(self, exc_type, exc_value, exc_tb):
+        """Catch exceptions raised inside tkinter event callbacks."""
+        _write_crash_log(exc_type, exc_value, exc_tb)
+        try:
+            messagebox.showerror(
+                'Speech Panel — พบข้อผิดพลาด',
+                f'เกิดข้อผิดพลาดใน UI:\n'
+                f'{exc_type.__name__}: {exc_value}\n\n'
+                f'บันทึกรายละเอียดไว้ที่:\n{_LOG_FILE}')
+        except Exception:
+            pass
+
     def run(self): self.mainloop()
 
 
 if __name__ == '__main__':
-    SpeechPanel().run()
+    _ensure_single_instance()
+    _setup_crash_handler()
+    try:
+        SpeechPanel().run()
+    except Exception:
+        _write_crash_log(*sys.exc_info())
+        raise
