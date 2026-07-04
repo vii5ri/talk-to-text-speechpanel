@@ -359,9 +359,11 @@ class SpeechPanel(ctk.CTk):
         self._gc_final     = ''
         # Vocabulary (custom word corrections)
         self._vocab: list[str] = self._cfg.get('vocab', [])
-        self._snap_edge      = 'left'
-        self._edge_tab       = None
+        self._snap_edge       = 'left'
+        self._edge_tab        = None
         self._edge_tab_locked = False
+        self._auto_collapse   = False
+        self._leave_job       = None
 
         self._init_window()
         self._build_ui()
@@ -416,13 +418,20 @@ class SpeechPanel(ctk.CTk):
                 command=lambda d=_d: self._snap_to_edge(d))
             _b.pack(side='left', padx=1)
             self._snap_btns[_d] = _b
-        # Collapse button — large, prominent icon
+        # Auto-collapse toggle button (🖱 = mouse-out collapses)
+        self._auto_col_btn = ctk.CTkButton(
+            hdr, text='🖱', width=42, height=40,
+            fg_color=C['card'], hover_color=C['purple'],
+            font=ctk.CTkFont(size=16), text_color=C['sub'],
+            command=self._toggle_auto_collapse)
+        self._auto_col_btn.pack(side='left', padx=(3, 0))
+        # Collapse button — large, prominent icon; RED = auto-collapse OFF, BLUE = ON
         self._collapse_btn = ctk.CTkButton(
             hdr, text='⊟', width=54, height=44,
-            fg_color=C['card'], hover_color=C['border'],
-            font=ctk.CTkFont(size=24), text_color=C['sub'],
+            fg_color=C['red'], hover_color=C['border'],
+            font=ctk.CTkFont(size=24), text_color='#fff',
             command=self._collapse_panel)
-        self._collapse_btn.pack(side='left', padx=(0, 2))
+        self._collapse_btn.pack(side='left', padx=(2, 2))
         # Close (quit) button
         ctk.CTkButton(hdr, text='✕', width=50, height=44, fg_color='transparent',
                       hover_color='#b91c1c', font=ctk.CTkFont(size=20), text_color=C['sub'],
@@ -786,7 +795,40 @@ class SpeechPanel(ctk.CTk):
         else:
             self._lock_btn.configure(fg_color=C['accent'], text='🔓')
 
+    def _toggle_auto_collapse(self):
+        self._auto_collapse = not self._auto_collapse
+        self._update_auto_collapse_btn()
+        if self._auto_collapse and self._visible:
+            self._monitor_leave()
+
+    def _update_auto_collapse_btn(self):
+        if self._auto_collapse:
+            self._auto_col_btn.configure(fg_color=C['accent'], text_color='#fff')
+            self._collapse_btn.configure(fg_color=C['accent'])
+        else:
+            self._auto_col_btn.configure(fg_color=C['card'], text_color=C['sub'])
+            self._collapse_btn.configure(fg_color=C['red'])
+
+    def _monitor_leave(self):
+        if self._leave_job:
+            try: self.after_cancel(self._leave_job)
+            except Exception: pass
+            self._leave_job = None
+        if not self._auto_collapse or not self._visible:
+            return
+        mx, my = self.winfo_pointerxy()
+        wx, wy = self.winfo_x(), self.winfo_y()
+        ww, wh = self.winfo_width(), self.winfo_height()
+        if not (wx <= mx <= wx + ww and wy <= my <= wy + wh):
+            self._collapse_panel()
+        else:
+            self._leave_job = self.after(300, self._monitor_leave)
+
     def _collapse_panel(self):
+        if self._leave_job:
+            try: self.after_cancel(self._leave_job)
+            except Exception: pass
+            self._leave_job = None
         self._show_edge_tab()
         self._visible = False
         self.withdraw()
@@ -796,6 +838,8 @@ class SpeechPanel(ctk.CTk):
         self.deiconify(); self.lift()
         self._visible = True
         self._update_lock_btn()
+        if self._auto_collapse:
+            self._monitor_leave()
 
     def _destroy_edge_tab(self):
         if self._edge_tab:
