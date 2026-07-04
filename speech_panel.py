@@ -454,6 +454,19 @@ class SpeechPanel(ctk.CTk):
                       font=ctk.CTkFont(size=20),
                       command=lambda: webbrowser.open(IMAGE_TOOL)
                       ).pack(side='right', padx=2)
+        # AI Chat launcher (header)
+        ctk.CTkButton(hdr, text='🤖', width=38, height=34,
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      font=ctk.CTkFont(size=18),
+                      command=self._open_ai_chat).pack(side='right', padx=(2, 4), pady=5)
+        self._ai_var = tk.StringVar(value='Gemini')
+        self._ai_menu = ctk.CTkOptionMenu(
+            hdr, variable=self._ai_var,
+            values=list(AI_CHATS.keys()),
+            width=115, height=34, font=_f(10),
+            fg_color=C['card2'], button_color=C['accent'],
+            button_hover_color=C['purple'], text_color=C['text'])
+        self._ai_menu.pack(side='right', padx=(4, 2), pady=5)
 
         # Body
         body = ctk.CTkFrame(self, fg_color=C['bg'], corner_radius=0)
@@ -547,22 +560,6 @@ class SpeechPanel(ctk.CTk):
                       command=lambda: webbrowser.open('https://talk-to-text-thai.lovable.app/')
                       ).pack(side='left', fill='x', expand=True)
 
-        # AI Chat launcher
-        ai_row = ctk.CTkFrame(left, fg_color=C['card'], corner_radius=8)
-        ai_row.pack(fill='x', padx=4, pady=(2, 4))
-        ctk.CTkLabel(ai_row, text='🤖', font=ctk.CTkFont(size=13),
-                     text_color=C['accent']).pack(side='left', padx=(8, 2), pady=4)
-        self._ai_var = tk.StringVar(value='ChatGPT')
-        self._ai_menu = ctk.CTkOptionMenu(
-            ai_row, variable=self._ai_var,
-            values=list(AI_CHATS.keys()),
-            width=140, height=26, font=_f(11),
-            fg_color=C['card2'], button_color=C['accent'],
-            button_hover_color=C['purple'], text_color=C['text'])
-        self._ai_menu.pack(side='left', padx=(0, 4), pady=4)
-        ctk.CTkButton(ai_row, text='เปิด', width=50, height=26, font=_f(11),
-                      fg_color=C['accent'], hover_color=C['purple'],
-                      command=self._open_ai_chat).pack(side='left', pady=4)
 
         # Segments
         self._seg_frame = ctk.CTkScrollableFrame(
