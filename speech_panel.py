@@ -841,13 +841,18 @@ class SpeechPanel(ctk.CTk):
             self._leave_job = None
         if not self._auto_collapse or not self._visible or self._edge_tab_locked:
             return
-        mx, my = self.winfo_pointerxy()
-        wx, wy = self.winfo_x(), self.winfo_y()
-        ww, wh = self.winfo_width(), self.winfo_height()
-        if not (wx <= mx <= wx + ww and wy <= my <= wy + wh):
-            self._collapse_panel()
-        else:
-            self._leave_job = self.after(300, self._monitor_leave)
+        try:
+            mx, my = self.winfo_pointerxy()
+            wx = self.winfo_rootx()
+            wy = self.winfo_rooty()
+            ww = self.winfo_width()
+            wh = self.winfo_height()
+            if mx < wx or mx > wx + ww or my < wy or my > wy + wh:
+                self._collapse_panel()
+                return
+        except Exception:
+            pass  # coords unavailable — keep polling
+        self._leave_job = self.after(200, self._monitor_leave)
 
     def _collapse_panel(self):
         if self._leave_job:
