@@ -361,6 +361,7 @@ class SpeechPanel(ctk.CTk):
         self._vocab: list[str] = self._cfg.get('vocab', [])
         self._snap_edge       = 'left'
         self._edge_tab        = None
+        self._edge_tab_hover  = None
         self._edge_tab_locked = False
         self._auto_collapse   = False
         self._leave_job       = None
@@ -855,6 +856,10 @@ class SpeechPanel(ctk.CTk):
             try: self._edge_tab.destroy()
             except Exception: pass
             self._edge_tab = None
+        if self._edge_tab_hover:
+            try: self._edge_tab_hover.destroy()
+            except Exception: pass
+            self._edge_tab_hover = None
 
     def _show_edge_tab(self):
         self._destroy_edge_tab()
@@ -917,6 +922,29 @@ class SpeechPanel(ctk.CTk):
         lock_lbl.bind('<Button-1>', _toggle_lock)
         tab.bind('<Enter>', _on_enter)
         self._edge_tab = tab
+
+        # Invisible extended hover zone — adds ~150px above & below the tab
+        # so the user doesn't have to aim precisely at the small visible strip
+        _EXTRA = 150
+        if vertical:
+            hz_x = tx
+            hz_y = max(0, ty - _EXTRA)
+            hz_w = tw
+            hz_h = min(sh, th + 2 * _EXTRA)
+        else:
+            hz_x = max(0, tx - _EXTRA)
+            hz_y = ty
+            hz_w = min(sw, tw + 2 * _EXTRA)
+            hz_h = th
+        hz = tk.Toplevel()
+        hz.overrideredirect(True)
+        hz.attributes('-topmost', True)
+        hz.attributes('-alpha', 0.01)   # nearly invisible but captures mouse events
+        hz.configure(bg='#000000')
+        hz.geometry(f'{hz_w}x{hz_h}+{hz_x}+{hz_y}')
+        hz.bind('<Enter>', _on_enter)
+        hz.bind('<Button-1>', lambda e: self._expand_panel())
+        self._edge_tab_hover = hz
 
     def _quit_app(self):
         self._destroy_edge_tab()
