@@ -496,17 +496,18 @@ class SpeechPanel(ctk.CTk):
         self._replace_hint = ctk.CTkLabel(mz, text='', font=_f(10), text_color=C['purple'])
         self._replace_hint.pack(pady=(0,1))
 
-        # Live preview (disabled - use space for combined box)
+        # Live preview — hidden by default, auto-shows during real-time STT
         self._partial_tb = ctk.CTkTextbox(
-            left, height=1, font=_f(15),
+            left, height=72, font=_f(15),
             fg_color=C['card2'], text_color=C['accent'],
-            border_width=0, border_color=C['border'],
+            border_width=1, border_color=C['border'],
             wrap='word', state='disabled')
-        self._partial_tb.pack(fill='x', padx=4, pady=(0,0))
+        # (not packed initially — appears only when there is live preview text)
 
         # Action bar
-        act = ctk.CTkFrame(left, fg_color=C['bg'])
-        act.pack(fill='x', padx=4, pady=(0,2))
+        self._act_bar = ctk.CTkFrame(left, fg_color=C['bg'])
+        self._act_bar.pack(fill='x', padx=4, pady=(0,2))
+        act = self._act_bar
         ctk.CTkButton(act, text='📋 ทั้งหมด', height=26, font=_f(11),
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._copy_all).pack(side='left', fill='x', expand=True, padx=(0,2))
@@ -970,7 +971,14 @@ class SpeechPanel(ctk.CTk):
     def _set_partial(self, text: str):
         self._partial_tb.configure(state='normal')
         self._partial_tb.delete('1.0','end')
-        if text: self._partial_tb.insert('1.0', text)
+        if text:
+            self._partial_tb.insert('1.0', text)
+            if not self._partial_tb.winfo_ismapped():
+                self._partial_tb.pack(fill='x', padx=4, pady=(0,4),
+                                      before=self._act_bar)
+        else:
+            if self._partial_tb.winfo_ismapped():
+                self._partial_tb.pack_forget()
         self._partial_tb.configure(state='disabled')
 
     # ── Recording (router) ────────────────────────────────────────────────────
