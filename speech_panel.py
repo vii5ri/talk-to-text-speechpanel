@@ -802,9 +802,15 @@ class SpeechPanel(ctk.CTk):
 
     def _toggle_lock(self):
         self._edge_tab_locked = not self._edge_tab_locked
+        # Lock OFF → auto-collapse ON, Lock ON → auto-collapse OFF
+        self._auto_collapse = not self._edge_tab_locked
         self._cfg['locked'] = self._edge_tab_locked
+        self._cfg['auto_collapse'] = self._auto_collapse
         _save_cfg(self._cfg)
         self._update_lock_btn()
+        self._update_auto_collapse_btn()
+        if self._auto_collapse and self._visible:
+            self._monitor_leave()
 
     def _update_lock_btn(self):
         if self._edge_tab_locked:
