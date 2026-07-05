@@ -368,6 +368,10 @@ class SpeechPanel(ctk.CTk):
 
         self._init_window()
         self._build_ui()
+        # Sync button colours and start polling if auto-collapse was saved in config
+        self._update_auto_collapse_btn()
+        if self._auto_collapse and not self._edge_tab_locked:
+            self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
         self.bind('<space>', self._space_key)
 
@@ -429,7 +433,8 @@ class SpeechPanel(ctk.CTk):
         # Collapse button — large, prominent icon; RED = auto-collapse OFF, BLUE = ON
         self._collapse_btn = ctk.CTkButton(
             hdr, text='⊟', width=54, height=44,
-            fg_color=C['red'], hover_color=C['border'],
+            fg_color=C['accent'] if self._auto_collapse else C['red'],
+            hover_color=C['border'],
             font=ctk.CTkFont(size=24), text_color='#fff',
             command=self._collapse_panel)
         self._collapse_btn.pack(side='left', padx=(2, 2))
