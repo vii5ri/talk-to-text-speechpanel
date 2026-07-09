@@ -33,10 +33,12 @@ BLOCKSIZE  = 1024
 SEP        = ' '
 IMAGE_TOOL = 'https://image-to-type-helper.lovable.app/'
 AI_CHATS   = {
-    'ChatGPT':    'https://chat.openai.com/',
-    'Gemini':     'https://gemini.google.com/',
-    'Claude':     'https://claude.ai/',
-    'Perplexity': 'https://www.perplexity.ai/',
+    'ChatGPT':       'https://chat.openai.com/',
+    'Gemini':        'https://gemini.google.com/',
+    'Claude':        'https://claude.ai/',
+    'Perplexity':    'https://www.perplexity.ai/',
+    'Image to Text': 'https://image-to-type-helper.lovable.app/',
+    'Talk to Text':  'https://talk-to-text-thai.lovable.app/',
     'Grok':       'https://x.com/i/grok',
     'Meta AI':    'https://www.meta.ai/',
     'Manus':      'https://manus.im/',
@@ -474,7 +476,7 @@ class SpeechPanel(ctk.CTk):
         self._ai_menu = ctk.CTkOptionMenu(
             hdr, variable=self._ai_var,
             values=list(AI_CHATS.keys()),
-            width=115, height=34, font=_f(10),
+            width=130, height=34, font=_f(10),
             fg_color=C['card2'], button_color=C['accent'],
             button_hover_color=C['purple'], text_color=C['text'])
         self._ai_menu.pack(side='right', padx=(4, 2), pady=5)
@@ -559,17 +561,6 @@ class SpeechPanel(ctk.CTk):
                       fg_color=C['card'], hover_color='#b91c1c',
                       command=self._clear_all).pack(side='right')
 
-        # Tools row (Image to Text, Talk to Text)
-        tools_row = ctk.CTkFrame(left, fg_color=C['bg'])
-        tools_row.pack(fill='x', padx=4, pady=(0, 2))
-        ctk.CTkButton(tools_row, text='🖼 Image to Text', height=26, font=_f(11),
-                      fg_color=C['accent'], hover_color=C['purple'],
-                      command=lambda: webbrowser.open('https://image-to-type-helper.lovable.app/')
-                      ).pack(side='left', fill='x', expand=True, padx=(0, 2))
-        ctk.CTkButton(tools_row, text='💬 Talk to Text', height=26, font=_f(11),
-                      fg_color=C['accent'], hover_color=C['purple'],
-                      command=lambda: webbrowser.open('https://talk-to-text-thai.lovable.app/')
-                      ).pack(side='left', fill='x', expand=True)
 
 
         # Segments
