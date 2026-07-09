@@ -357,8 +357,13 @@ class SpeechPanel(ctk.CTk):
         self._gc_queue     = None
         self._gc_done      = False
         self._gc_final     = ''
-        # Vocabulary (custom word corrections)
-        self._vocab: list[str] = self._cfg.get('vocab', [])
+        # Vocabulary tabs (migrate old flat list → tab "1")
+        if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
+            self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
+            _save_cfg(self._cfg)
+        self._vocab_tabs: dict[str, list[str]] = self._cfg.get(
+            'vocab_tabs', {'1': [], '2': [], '3': []})
+        self._active_tab: str = self._cfg.get('vocab_active_tab', '1')
         self._snap_edge       = 'left'
         self._edge_tab        = None
         self._edge_tab_hover  = None
@@ -704,17 +709,19 @@ class SpeechPanel(ctk.CTk):
         word = dialog.get_input()
         if word and word.strip():
             w = word.strip()
-            if w not in self._vocab:
-                self._vocab.append(w)
-                self._cfg['vocab'] = self._vocab
+            tab = self._vocab_tabs[self._active_tab]
+            if w not in tab:
+                tab.append(w)
+                self._cfg['vocab_tabs'] = self._vocab_tabs
                 _save_cfg(self._cfg)
                 self._refresh_vocab()
                 self.show_toast(f'เพิ่ม "{w}" แล้ว')
 
     def _delete_vocab(self, word):
-        if word in self._vocab:
-            self._vocab.remove(word)
-            self._cfg['vocab'] = self._vocab
+        tab = self._vocab_tabs[self._active_tab]
+        if word in tab:
+            tab.remove(word)
+            self._cfg['vocab_tabs'] = self._vocab_tabs
             _save_cfg(self._cfg)
             self._refresh_vocab()
             self.show_toast(f'ลบ "{word}" แล้ว', 'info')
