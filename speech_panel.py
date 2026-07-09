@@ -337,7 +337,7 @@ class SpeechPanel(ctk.CTk):
     def __init__(self):
         super().__init__()
         self._cfg          = _load_cfg()
-        self._mode         = self._cfg.get('mode', STT_FREE)
+        self._mode         = STT_FREE
         self._visible      = True
         self._recording    = False
         self._rec_start    = 0.0
@@ -454,14 +454,6 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(hdr, text='─', width=50, height=44, fg_color='transparent',
                       hover_color=C['card'], font=ctk.CTkFont(size=20), text_color=C['sub'],
                       command=self._toggle_visibility).pack(side='right', padx=(0,2))
-        self._theme_btn = ctk.CTkButton(hdr, text='☀️', width=46, height=44,
-                                         fg_color='transparent', hover_color=C['card'],
-                                         font=ctk.CTkFont(size=20), command=self._toggle_theme)
-        self._theme_btn.pack(side='right', padx=2)
-        self._startup_btn = ctk.CTkButton(hdr, text='⚙️', width=46, height=44,
-                                           fg_color='transparent', hover_color=C['card'],
-                                           font=ctk.CTkFont(size=20), command=self._show_settings)
-        self._startup_btn.pack(side='right', padx=2)
         ctk.CTkButton(hdr, text='🖼', width=46, height=44,
                       fg_color='transparent', hover_color=C['card'],
                       font=ctk.CTkFont(size=20),
@@ -499,13 +491,6 @@ class SpeechPanel(ctk.CTk):
                                command=lambda c=code: setattr(self,'_lang',c),
                                font=_f(12), fg_color=C['accent']).pack(side='left', padx=(0,10))
 
-        # STT mode selector
-        self._mode_seg = ctk.CTkSegmentedButton(
-            tr, values=['🌐 Free','🔌 Vosk','☁️ Cloud'],
-            height=24, font=_f(10), command=self._on_mode_change)
-        mode_map = {STT_FREE:'🌐 Free', STT_VOSK:'🔌 Vosk', STT_GCLOUD:'☁️ Cloud'}
-        self._mode_seg.set(mode_map.get(self._mode,'🌐 Free'))
-        self._mode_seg.pack(side='right')
 
         # Mic zone: status LEFT | mic CENTER (fixed) | timer RIGHT
         # Both side columns have equal uniform minsize so mic never shifts
