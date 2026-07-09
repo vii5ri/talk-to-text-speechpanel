@@ -37,7 +37,6 @@ AI_CHATS   = {
     'Gemini':        'https://gemini.google.com/',
     'Claude':        'https://claude.ai/',
     'Perplexity':    'https://www.perplexity.ai/',
-    'Image to Text': 'https://image-to-type-helper.lovable.app/',
     'Talk to Text':  'https://talk-to-text-thai.lovable.app/',
     'Grok':       'https://x.com/i/grok',
     'Meta AI':    'https://www.meta.ai/',
