@@ -2,14 +2,13 @@
 # -*- coding: utf-8 -*-
 """
 Speech Panel v2 — Thai / English Speech-to-Text
-Modes: 🌐 Free | 🔌 Vosk (offline real-time) | ☁️ Google Cloud (real-time)
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
 """
-import threading, io, wave, time, json, queue as queuelib
-import os, sys, winreg, subprocess, webbrowser
+import threading, io, wave, time, json
+import os, sys, webbrowser
 import datetime, traceback, ctypes
 import tkinter as tk
-from tkinter import messagebox, filedialog
+from tkinter import messagebox
 import customtkinter as ctk
 import numpy as np
 import sounddevice as sd
@@ -17,11 +16,6 @@ import speech_recognition as sr
 from deep_translator import GoogleTranslator
 import pyperclip
 import keyboard
-
-# ── STT modes ─────────────────────────────────────────────────────────────────
-STT_FREE   = 'free'
-STT_VOSK   = 'vosk'
-STT_GCLOUD = 'gcloud'
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 PANEL_W    = 880
@@ -104,73 +98,11 @@ def _save_cfg(d: dict):
     except Exception:
         pass
 
-# ── Windows helpers ───────────────────────────────────────────────────────────
-_RUN_KEY  = r'Software\Microsoft\Windows\CurrentVersion\Run'
-_APP_NAME = 'SpeechPanel'
-
-def _startup_get() -> bool:
-    try:
-        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_READ)
-        winreg.QueryValueEx(k, _APP_NAME); winreg.CloseKey(k); return True
-    except OSError:
-        return False
-
-def _startup_set(on: bool):
-    try:
-        k = winreg.OpenKey(winreg.HKEY_CURRENT_USER, _RUN_KEY, 0, winreg.KEY_SET_VALUE)
-        if on:
-            winreg.SetValueEx(k, _APP_NAME, 0, winreg.REG_SZ, f'"{sys.executable}"')
-        else:
-            try: winreg.DeleteValue(k, _APP_NAME)
-            except FileNotFoundError: pass
-        winreg.CloseKey(k)
-    except OSError: pass
-
-def _sm_path() -> str:
-    return os.path.join(os.environ.get('APPDATA',''),
-                        r'Microsoft\Windows\Start Menu\Programs', 'Speech Panel.lnk')
-
-def _sm_exists() -> bool: return os.path.exists(_sm_path())
-
-def _sm_create():
-    t = sys.executable.replace('\\','\\\\')
-    p = _sm_path().replace('\\','\\\\')
-    icon = _ICON_FILE if os.path.isfile(_ICON_FILE) else t
-    icon = icon.replace('\\','\\\\')
-    cwd = _BASE.replace('\\','\\\\')
-    subprocess.run(['powershell','-NoProfile','-Command',
-        f'$s=(New-Object -COM WScript.Shell).CreateShortcut("{p}");'
-        f'$s.TargetPath="{t}";'
-        f'$s.Arguments="speech_panel.py";'
-        f'$s.WorkingDirectory="{cwd}";'
-        f'$s.IconLocation="{icon}";'
-        '$s.Save()'],
-        creationflags=subprocess.CREATE_NO_WINDOW, capture_output=True)
-
-def _sm_remove():
-    p = _sm_path()
-    if os.path.exists(p): os.remove(p)
-
-# ── Lazy imports (optional packages) ─────────────────────────────────────────
-_vosk_cache: dict = {}   # model_path → vosk.Model
-
-def _vosk():
-    try: import vosk; return vosk
-    except ImportError: return None
-
-def _gcloud_speech():
-    try: from google.cloud import speech; return speech
-    except ImportError: return None
-
 # ── Palette ───────────────────────────────────────────────────────────────────
 _DARK = dict(bg='#0f172a', header='#1e293b', card='#1e293b', card2='#0f172a',
              combined='#060d17', accent='#3b82f6', purple='#7c3aed',
              red='#ef4444', green='#16a34a', text='#f1f5f9', sub='#64748b',
              border='#334155', del_hover='#7f1d1d')
-_LIGHT = dict(bg='#f8fafc', header='#e2e8f0', card='#ffffff', card2='#f1f5f9',
-              combined='#edf2f7', accent='#2563eb', purple='#7c3aed',
-              red='#dc2626', green='#15803d', text='#0f172a', sub='#64748b',
-              border='#cbd5e1', del_hover='#fee2e2')
 C = _DARK.copy()
 ctk.set_appearance_mode('dark')
 ctk.set_default_color_theme('blue')
@@ -187,73 +119,6 @@ class Toast(ctk.CTkFrame):
         ctk.CTkLabel(self, text=msg, font=_f(12,'bold'), text_color='#fff').pack(padx=14, pady=6)
         self.place(relx=0.5, rely=0.97, anchor='center')
         self.after(2200, self.destroy)
-
-
-# ── Settings dialog ───────────────────────────────────────────────────────────
-class SettingsDialog(ctk.CTkToplevel):
-    def __init__(self, parent, cfg: dict, on_save):
-        super().__init__(parent)
-        self._cfg    = cfg.copy()
-        self._on_save = on_save
-        self.title('ตั้งค่า STT')
-        self.geometry('520x290')
-        self.resizable(False, False)
-        self.attributes('-topmost', True)
-        self.grab_set()
-        self._build()
-
-    def _build(self):
-        pad = dict(padx=20)
-
-        ctk.CTkLabel(self, text='🔌  Vosk — ออฟไลน์ ฟรี real-time',
-                     font=_f(12,'bold'), text_color=C['accent']).pack(anchor='w', **pad, pady=(14,2))
-        vr = ctk.CTkFrame(self, fg_color='transparent')
-        vr.pack(fill='x', **pad)
-        self._vosk_v = tk.StringVar(value=self._cfg.get('vosk_path',''))
-        ctk.CTkEntry(vr, textvariable=self._vosk_v, font=_f(11), height=30,
-                     placeholder_text='เลือก folder ของ Vosk Thai model').pack(
-            side='left', fill='x', expand=True, padx=(0,6))
-        ctk.CTkButton(vr, text='เลือก Folder', width=110, height=30, font=_f(11),
-                      command=self._brw_vosk).pack(side='right')
-        ctk.CTkLabel(self, text='ดาวน์โหลด model: alphacephei.com/vosk/models  → vosk-model-small-th-0.15',
-                     font=_f(9), text_color=C['sub']).pack(anchor='w', **pad, pady=(2,10))
-
-        ctk.CTkLabel(self, text='☁️  Google Cloud STT — real-time คุณภาพสูง (60 นาที/เดือน ฟรี)',
-                     font=_f(12,'bold'), text_color=C['purple']).pack(anchor='w', **pad, pady=(4,2))
-        gr = ctk.CTkFrame(self, fg_color='transparent')
-        gr.pack(fill='x', **pad)
-        self._gc_v = tk.StringVar(value=self._cfg.get('gcloud_creds',''))
-        ctk.CTkEntry(gr, textvariable=self._gc_v, font=_f(11), height=30,
-                     placeholder_text='เลือก Service Account JSON file').pack(
-            side='left', fill='x', expand=True, padx=(0,6))
-        ctk.CTkButton(gr, text='เลือก File', width=110, height=30, font=_f(11),
-                      command=self._brw_gc).pack(side='right')
-        ctk.CTkLabel(self, text='สร้าง Service Account JSON จาก Google Cloud Console → APIs & Services',
-                     font=_f(9), text_color=C['sub']).pack(anchor='w', **pad, pady=(2,14))
-
-        br = ctk.CTkFrame(self, fg_color='transparent')
-        br.pack(fill='x', **pad, pady=(0,14))
-        ctk.CTkButton(br, text='บันทึก', font=_f(13),
-                      fg_color=C['accent'], hover_color=C['purple'],
-                      command=self._save).pack(side='right', padx=(6,0))
-        ctk.CTkButton(br, text='ยกเลิก', font=_f(13),
-                      fg_color=C['card'], hover_color=C['border'],
-                      command=self.destroy).pack(side='right')
-
-    def _brw_vosk(self):
-        p = filedialog.askdirectory(title='เลือก Vosk Model Folder')
-        if p: self._vosk_v.set(p)
-
-    def _brw_gc(self):
-        p = filedialog.askopenfilename(title='เลือก Credentials JSON',
-                                        filetypes=[('JSON','*.json')])
-        if p: self._gc_v.set(p)
-
-    def _save(self):
-        self._cfg['vosk_path']    = self._vosk_v.get()
-        self._cfg['gcloud_creds'] = self._gc_v.get()
-        self._on_save(self._cfg)
-        self.destroy()
 
 
 # ── Segment card ──────────────────────────────────────────────────────────────
@@ -336,7 +201,6 @@ class SpeechPanel(ctk.CTk):
     def __init__(self):
         super().__init__()
         self._cfg          = _load_cfg()
-        self._mode         = STT_FREE
         self._visible      = True
         self._recording    = False
         self._rec_start    = 0.0
@@ -346,18 +210,10 @@ class SpeechPanel(ctk.CTk):
         self._recognizer   = sr.Recognizer()
         self._cards: list[SegmentCard] = []
         self._seg_id       = 0
-        self._dark         = True
         self._replace_card = None
         self._replace_sel  = None
         self._upd_after    = None
         self._active_card  = None
-        # Vosk state
-        self._vosk_rec     = None
-        self._vosk_text    = ''
-        # Google Cloud state
-        self._gc_queue     = None
-        self._gc_done      = False
-        self._gc_final     = ''
         # Vocabulary tabs (migrate old flat list → tab "1")
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
@@ -745,15 +601,6 @@ class SpeechPanel(ctk.CTk):
         nh = max(640, self._rh + (e.y_root - self._ry))
         self.geometry(f'{nw}x{nh}')
 
-    # ── Mode ──────────────────────────────────────────────────────────────────
-
-    def _on_mode_change(self, value):
-        m = {v: k for k, v in {'🌐 Free': STT_FREE, '🔌 Vosk': STT_VOSK, '☁️ Cloud': STT_GCLOUD}.items()}
-        label_to_key = {'🌐 Free': STT_FREE, '🔌 Vosk': STT_VOSK, '☁️ Cloud': STT_GCLOUD}
-        self._mode = label_to_key.get(value, STT_FREE)
-        self._cfg['mode'] = self._mode
-        _save_cfg(self._cfg)
-
     # ── Drag ──────────────────────────────────────────────────────────────────
 
     def _drag_start(self, e): self._ox = e.x_root - self.winfo_x(); self._oy = e.y_root - self.winfo_y()
@@ -981,50 +828,6 @@ class SpeechPanel(ctk.CTk):
         except Exception: pass
         self.destroy()
 
-    # ── Settings ──────────────────────────────────────────────────────────────
-
-    def _show_settings(self):
-        menu = tk.Menu(self, tearoff=0)
-        su = _startup_get()
-        menu.add_command(label=f'{"✓  " if su else "     "}เริ่มกับ Windows',
-                         command=self._toggle_startup)
-        sm = _sm_exists()
-        menu.add_command(label=f'{"✓  " if sm else "     "}อยู่ใน Start Menu',
-                         command=self._toggle_start_menu)
-        menu.add_separator()
-        menu.add_command(label='⚙️ ตั้งค่า Vosk / Google Cloud',
-                         command=self._open_settings_dialog)
-        x = self._startup_btn.winfo_rootx()
-        y = self._startup_btn.winfo_rooty() + self._startup_btn.winfo_height()
-        menu.tk_popup(x, y)
-
-    def _toggle_startup(self):
-        _startup_set(not _startup_get())
-        self.show_toast('✅ เริ่มกับ Windows แล้ว' if _startup_get()
-                        else '⛔ ยกเลิกเริ่มกับ Windows', 'info')
-
-    def _toggle_start_menu(self):
-        if _sm_exists():
-            _sm_remove(); self.show_toast('⛔ ลบออกจาก Start Menu แล้ว', 'info')
-        else:
-            _sm_create()
-            self.show_toast('✅ เพิ่มใน Start Menu แล้ว' if _sm_exists()
-                            else '⚠️ เพิ่มไม่ได้', 'error')
-
-    def _open_settings_dialog(self):
-        SettingsDialog(self, self._cfg, self._on_cfg_saved)
-
-    def _on_cfg_saved(self, new_cfg):
-        self._cfg = new_cfg; _save_cfg(new_cfg)
-        global _vosk_cache; _vosk_cache.clear()   # reload model on next use
-
-    # ── Theme ─────────────────────────────────────────────────────────────────
-
-    def _toggle_theme(self):
-        self._dark = not self._dark
-        if self._dark: C.update(_DARK); ctk.set_appearance_mode('dark'); self._theme_btn.configure(text='☀️')
-        else: C.update(_LIGHT); ctk.set_appearance_mode('light'); self._theme_btn.configure(text='🌙')
-
     # ── Space key ─────────────────────────────────────────────────────────────
 
     def _space_key(self, event):
@@ -1068,15 +871,10 @@ class SpeechPanel(ctk.CTk):
         else:
             self._set_status('🔴 กำลังฟัง... กด Space หรือ ⏹ เพื่อหยุด')
         self._tick()
-
-        if self._mode == STT_VOSK: self._start_vosk()
-        elif self._mode == STT_GCLOUD: self._start_gcloud()
-        else: self._start_free()
+        self._start_free()
 
     def _stop_rec(self):
-        if self._mode == STT_VOSK: self._stop_vosk()
-        elif self._mode == STT_GCLOUD: self._stop_gcloud()
-        else: self._stop_free()
+        self._stop_free()
 
     def _common_stop_ui(self):
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
@@ -1127,122 +925,6 @@ class SpeechPanel(ctk.CTk):
         except sr.UnknownValueError: self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
         except sr.RequestError: self.after(0, lambda: self._rec_err('ไม่มีอินเทอร์เน็ต'))
         except Exception as e: self.after(0, lambda: self._rec_err(str(e)[:50]))
-
-    # ── Vosk mode (offline real-time) ─────────────────────────────────────────
-
-    def _start_vosk(self):
-        vosk = _vosk()
-        if not vosk:
-            self._rec_err('ไม่พบ Vosk — pip install vosk'); return
-        mp = self._cfg.get('vosk_path','')
-        if not mp or not os.path.isdir(mp):
-            self._rec_err('กรุณาตั้งค่า Vosk model ใน ⚙️'); return
-
-        self._set_status('⏳ โหลด Vosk model...')
-        if mp not in _vosk_cache:
-            try: _vosk_cache[mp] = vosk.Model(mp)
-            except Exception as e: self._rec_err(f'Vosk model: {e}'); return
-
-        rec = vosk.KaldiRecognizer(_vosk_cache[mp], SAMPLERATE)
-        self._vosk_rec = rec; self._vosk_text = ''
-        self._set_status('🔴 Vosk กำลังฟัง... (real-time)')
-
-        def _cb(indata, frames, t, status):
-            if not self._recording: return
-            data = bytes(indata)
-            if rec.AcceptWaveform(data):
-                w = json.loads(rec.Result()).get('text','')
-                if w: self._vosk_text += (' ' if self._vosk_text else '') + w
-                self.after(0, lambda d=self._vosk_text: self._set_partial(d))
-            else:
-                p = json.loads(rec.PartialResult()).get('partial','')
-                display = self._vosk_text + (' ' if self._vosk_text and p else '') + p + ('...' if p else '')
-                if display: self.after(0, lambda d=display: self._set_partial(d))
-
-        try:
-            self._stream = sd.InputStream(samplerate=SAMPLERATE, channels=1,
-                                           dtype='int16', blocksize=BLOCKSIZE, callback=_cb)
-            self._stream.start()
-        except Exception as e: self._rec_err(f'ไมค์: {e}')
-
-    def _stop_vosk(self):
-        self._recording = False
-        if self._stream: self._stream.stop(); self._stream.close(); self._stream = None
-        final = ''
-        if self._vosk_rec:
-            final = json.loads(self._vosk_rec.FinalResult()).get('text','')
-            if final: self._vosk_text += (' ' if self._vosk_text else '') + final
-            self._vosk_rec = None
-        self._common_stop_ui()
-        self._set_partial('')
-        full = self._vosk_text
-        self._finish_text(full)
-
-    # ── Google Cloud STT (streaming real-time) ────────────────────────────────
-
-    def _start_gcloud(self):
-        speech = _gcloud_speech()
-        if not speech: self._rec_err('ไม่พบ google-cloud-speech — pip install google-cloud-speech'); return
-        cp = self._cfg.get('gcloud_creds','')
-        if not cp or not os.path.isfile(cp): self._rec_err('กรุณาตั้งค่า Google credentials ใน ⚙️'); return
-
-        try: client = speech.SpeechClient.from_service_account_file(cp)
-        except Exception as e: self._rec_err(f'Credentials: {e}'); return
-
-        self._gc_queue = queuelib.Queue()
-        self._gc_done  = False
-        self._gc_final = ''
-
-        config = speech.RecognitionConfig(
-            encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
-            sample_rate_hertz=SAMPLERATE, language_code=self._lang)
-        sc = speech.StreamingRecognitionConfig(config=config, interim_results=True)
-
-        def _cb(indata, frames, t, status):
-            if self._recording: self._gc_queue.put(bytes(indata))
-
-        def _gen():
-            while not self._gc_done:
-                try:
-                    chunk = self._gc_queue.get(timeout=0.5)
-                    if chunk is None: return
-                    yield speech.StreamingRecognizeRequest(audio_content=chunk)
-                except queuelib.Empty:
-                    continue
-
-        def _stream_thr():
-            try:
-                for resp in client.streaming_recognize(sc, _gen()):
-                    for res in resp.results:
-                        tr = res.alternatives[0].transcript
-                        if res.is_final:
-                            self._gc_final += (' ' if self._gc_final else '') + tr
-                            self.after(0, lambda d=self._gc_final: self._set_partial(d))
-                        else:
-                            preview = self._gc_final + (' ' if self._gc_final else '') + tr + '...'
-                            self.after(0, lambda d=preview: self._set_partial(d))
-            except Exception as e:
-                self.after(0, lambda: self._set_status(f'⚠️ {str(e)[:40]}'))
-
-        self._set_status('🔴 Google Cloud กำลังฟัง... (real-time)')
-        try:
-            self._stream = sd.InputStream(samplerate=SAMPLERATE, channels=1,
-                                           dtype='int16', blocksize=BLOCKSIZE, callback=_cb)
-            self._stream.start()
-            threading.Thread(target=_stream_thr, daemon=True).start()
-        except Exception as e: self._rec_err(f'ไมค์: {e}')
-
-    def _stop_gcloud(self):
-        self._recording = False; self._gc_done = True
-        if self._gc_queue: self._gc_queue.put(None)
-        if self._stream: self._stream.stop(); self._stream.close(); self._stream = None
-        self._common_stop_ui()
-        def _finish():
-            time.sleep(0.8)
-            text = self._gc_final
-            self.after(0, lambda: self._set_partial(''))
-            self.after(0, lambda t=text: self._finish_text(t))
-        threading.Thread(target=_finish, daemon=True).start()
 
     # ── Common ────────────────────────────────────────────────────────────────
 
