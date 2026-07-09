@@ -385,6 +385,7 @@ class SpeechPanel(ctk.CTk):
         self.resizable(False, False)
         sh = self.winfo_screenheight()
         self.geometry(f'{PANEL_W}x{PANEL_H}+0+{max(0,(sh-PANEL_H)//2)}')
+        self.protocol('WM_DELETE_WINDOW', self._quit_app)
 
     # ── UI ────────────────────────────────────────────────────────────────────
 
