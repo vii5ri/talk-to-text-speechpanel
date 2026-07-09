@@ -669,8 +669,17 @@ class SpeechPanel(ctk.CTk):
 
         hr = ctk.CTkFrame(vf, fg_color='transparent')
         hr.pack(fill='x', padx=6, pady=(5,2))
-        ctk.CTkLabel(hr, text='📚 คำศัพท์ — คลิกเพื่อ Copy',
-                     font=_f(11,'bold'), text_color=C['accent']).pack(side='left')
+        self._tab_btns: dict[str, ctk.CTkButton] = {}
+        for t in ('1', '2', '3'):
+            active = t == self._active_tab
+            btn = ctk.CTkButton(
+                hr, text=t, width=36, height=26, font=_f(11, 'bold'),
+                fg_color=C['accent'] if active else C['card'],
+                text_color='#fff' if active else C['sub'],
+                hover_color=C['purple'],
+                command=lambda tab=t: self._switch_tab(tab))
+            btn.pack(side='left', padx=(0, 3))
+            self._tab_btns[t] = btn
         ctk.CTkButton(hr, text='+ เพิ่มคำ', width=76, height=26, font=_f(11),
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._prompt_add_vocab).pack(side='right')
@@ -682,15 +691,27 @@ class SpeechPanel(ctk.CTk):
         self._vocab_scroll.pack(fill='x', padx=4, pady=(0,4))
         self._refresh_vocab()
 
+    def _switch_tab(self, tab: str):
+        self._active_tab = tab
+        self._cfg['vocab_active_tab'] = tab
+        _save_cfg(self._cfg)
+        for t, btn in self._tab_btns.items():
+            if t == tab:
+                btn.configure(fg_color=C['accent'], text_color='#fff')
+            else:
+                btn.configure(fg_color=C['card'], text_color=C['sub'])
+        self._refresh_vocab()
+
     def _refresh_vocab(self):
         for w in self._vocab_scroll.winfo_children():
             w.destroy()
-        if not self._vocab:
+        words = self._vocab_tabs.get(self._active_tab, [])
+        if not words:
             ctk.CTkLabel(self._vocab_scroll,
                          text='ยังไม่มีคำ — กด "+ เพิ่มคำ" เพื่อใส่คำที่ถูกต้อง',
                          font=_f(10), text_color=C['sub']).pack(pady=6)
             return
-        for word in self._vocab:
+        for word in words:
             row = ctk.CTkFrame(self._vocab_scroll, fg_color='transparent')
             row.pack(fill='x', pady=1)
             ctk.CTkButton(row, text=word, font=_f(13), anchor='w',
