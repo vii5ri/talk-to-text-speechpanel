@@ -27,14 +27,15 @@ BLOCKSIZE  = 1024
 SEP        = ' '
 IMAGE_TOOL = 'https://image-to-type-helper.lovable.app/'
 AI_CHATS   = {
-    'ChatGPT':       'https://chat.openai.com/',
-    'Gemini':        'https://gemini.google.com/',
-    'Claude':        'https://claude.ai/',
-    'Perplexity':    'https://www.perplexity.ai/',
-    'Talk to Text':  'https://talk-to-text-thai.lovable.app/',
-    'Grok':       'https://x.com/i/grok',
-    'Meta AI':    'https://www.meta.ai/',
-    'Manus':      'https://manus.im/',
+    'ChatGPT':        'https://chat.openai.com/',
+    'Gemini':         'https://gemini.google.com/',
+    'Claude':         'https://claude.ai/',
+    'Perplexity':     'https://www.perplexity.ai/',
+    'Grok':           'https://x.com/i/grok',
+    'Meta AI':        'https://www.meta.ai/',
+    'Manus':          'https://manus.im/',
+    'Talk to Text':   'https://talk-to-text-thai.lovable.app/',
+    'Image to Text':  IMAGE_TOOL,
 }
 
 # ── Config ────────────────────────────────────────────────────────────────────
@@ -295,7 +296,7 @@ class SpeechPanel(ctk.CTk):
         self._auto_col_btn.pack(side='left', padx=(3, 0))
         # Collapse button — large, prominent icon; RED = auto-collapse OFF, BLUE = ON
         self._collapse_btn = ctk.CTkButton(
-            hdr, text='⊟', width=54, height=44,
+            hdr, text='⬡', width=54, height=44,
             fg_color=C['accent'] if self._auto_collapse else C['red'],
             hover_color=C['border'],
             font=ctk.CTkFont(size=24), text_color='#fff',
@@ -309,11 +310,6 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(hdr, text='─', width=50, height=44, fg_color='transparent',
                       hover_color=C['card'], font=ctk.CTkFont(size=20), text_color=C['sub'],
                       command=self._toggle_visibility).pack(side='right', padx=(0,2))
-        ctk.CTkButton(hdr, text='🖼', width=46, height=44,
-                      fg_color='transparent', hover_color=C['card'],
-                      font=ctk.CTkFont(size=20),
-                      command=lambda: webbrowser.open(IMAGE_TOOL)
-                      ).pack(side='right', padx=2)
         # AI Chat launcher (header)
         ctk.CTkButton(hdr, text='🤖', width=38, height=34,
                       fg_color=C['accent'], hover_color=C['purple'],
