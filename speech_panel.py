@@ -99,6 +99,19 @@ def _save_cfg(d: dict):
     except Exception:
         pass
 
+def _apply_pairs(text: str, pairs: list) -> str:
+    """Replace (wrong, right) pairs in text. Longest wrong first so a short
+    pair never eats the middle of a longer one. Latin replacements get a
+    space on each side; double spaces are collapsed, edges stripped."""
+    for wrong, right in sorted(pairs, key=lambda p: len(p[0]), reverse=True):
+        if not wrong:
+            continue
+        pad = any('a' <= ch.lower() <= 'z' for ch in right)
+        text = text.replace(wrong, f' {right} ' if pad else right)
+    while '  ' in text:
+        text = text.replace('  ', ' ')
+    return text.strip()
+
 # ── Palette ───────────────────────────────────────────────────────────────────
 _DARK = dict(bg='#0f172a', header='#1e293b', card='#1e293b', card2='#0f172a',
              combined='#060d17', accent='#3b82f6', purple='#7c3aed',
@@ -219,8 +232,18 @@ class SpeechPanel(ctk.CTk):
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
             _save_cfg(self._cfg)
-        self._vocab_tabs: dict[str, list[str]] = self._cfg.get(
+        self._vocab_tabs: dict[str, list[dict]] = self._cfg.get(
             'vocab_tabs', {'1': [], '2': [], '3': []})
+        # Migrate plain-string entries → {"wrong": "", "right": word}
+        migrated = False
+        for entries in self._vocab_tabs.values():
+            for i, e in enumerate(entries):
+                if isinstance(e, str):
+                    entries[i] = {'wrong': '', 'right': e}
+                    migrated = True
+        if migrated:
+            self._cfg['vocab_tabs'] = self._vocab_tabs
+            _save_cfg(self._cfg)
         self._active_tab: str = self._cfg.get('vocab_active_tab', '1')
         self._snap_edge       = 'left'
         self._edge_tab        = None
@@ -876,8 +899,15 @@ class SpeechPanel(ctk.CTk):
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
         self._timer_lbl.configure(text=''); self._replace_hint.configure(text='')
 
+    def _apply_dictionary(self, text: str) -> str:
+        pairs = [(e['wrong'], e['right'])
+                 for entries in self._vocab_tabs.values()
+                 for e in entries if e.get('wrong')]
+        return _apply_pairs(text, pairs) if pairs else text
+
     def _finish_text(self, text: str):
         if not text: self._set_status('ไม่ได้ยิน'); return
+        text = self._apply_dictionary(text)
         if self._replace_card and self._replace_sel:
             c, s, e_ = self._replace_card, *self._replace_sel
             def do():
