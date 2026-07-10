@@ -4,7 +4,7 @@
 Speech Panel v2 — Thai / English Speech-to-Text
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
 """
-import threading, io, wave, time, json
+import threading, io, wave, time, json, re
 import os, sys, webbrowser
 import datetime, traceback, ctypes
 import tkinter as tk
@@ -101,14 +101,18 @@ def _save_cfg(d: dict):
         pass
 
 def _apply_pairs(text: str, pairs: list) -> str:
-    """Replace (wrong, right) pairs in text. Longest wrong first so a short
-    pair never eats the middle of a longer one. Latin replacements get a
-    space on each side; double spaces are collapsed, edges stripped."""
+    """Replace (wrong, right) pairs in text. Longest wrong first. Matching
+    ignores letter case and any spaces inside the wrong word (STT often
+    splits '123' into '1 2 3'). Latin replacements get a space on each
+    side; double spaces are collapsed, edges stripped."""
     for wrong, right in sorted(pairs, key=lambda p: len(p[0]), reverse=True):
         if not wrong:
             continue
+        chars = [c for c in wrong if c != ' ']
+        pat = r'\s*'.join(re.escape(c) for c in chars)
         pad = any('a' <= ch.lower() <= 'z' for ch in right)
-        text = text.replace(wrong, f' {right} ' if pad else right)
+        repl = f' {right} ' if pad else right
+        text = re.sub(pat, lambda m: repl, text, flags=re.IGNORECASE)
     while '  ' in text:
         text = text.replace('  ', ' ')
     return text.strip()
