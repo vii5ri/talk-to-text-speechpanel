@@ -229,12 +229,12 @@ class SegmentCard(ctk.CTkFrame):
             self._tb._textbox.configure(exportselection=False)
         except Exception:
             pass
-        self._tb.bind('<Button-1>', lambda e: self._trigger_copy())
+        self._tb.bind('<Button-1>', lambda e: self._trigger_copy(e))
         self._tb.bind('<KeyRelease>', lambda e: self._fire())
         self._tb.bind('<<Paste>>', lambda e: self.after(20, self._fire))
 
-    def _trigger_copy(self):
-        if self._copy_cb: self._copy_cb(self)
+    def _trigger_copy(self, event=None):
+        if self._copy_cb: self._copy_cb(self, event)
 
     def _fire(self):
         if self._change_cb: self._change_cb()
@@ -249,6 +249,46 @@ class SegmentCard(ctk.CTkFrame):
     def get_selection(self):
         try: return (self._tb.index('sel.first'), self._tb.index('sel.last'))
         except tk.TclError: return None
+
+    def word_at(self, event) -> str:
+        tb = self._tb._textbox
+        idx = tb.index(f'@{event.x},{event.y}')
+        try:
+            return tb.get(f'{idx} wordstart', f'{idx} wordend').strip()
+        except tk.TclError:
+            return ''
+
+    def highlight_all(self, token: str) -> int:
+        tb = self._tb._textbox
+        tb.tag_remove('ph', '1.0', 'end')
+        tb.tag_configure('ph', background=C['purple'], foreground='#fff')
+        count, pos = 0, '1.0'
+        while True:
+            pos = tb.search(token, pos, stopindex='end', nocase=True)
+            if not pos: break
+            end = f'{pos}+{len(token)}c'
+            nxt = tb.get(end, f'{end}+1c')
+            if not nxt.isdigit():          # ABC must not hit ABC2
+                tb.tag_add('ph', pos, end)
+                count += 1
+            pos = end
+        return count
+
+    def clear_highlight(self):
+        try: self._tb._textbox.tag_remove('ph', '1.0', 'end')
+        except tk.TclError: pass
+
+    def replace_token(self, token: str, repl: str) -> int:
+        text = self.get_text()
+        pat = re.escape(token) + r'(?!\d)'
+        new, n = re.subn(pat, lambda m: repl, text, flags=re.IGNORECASE)
+        if n:
+            while '  ' in new:
+                new = new.replace('  ', ' ')
+            self._tb.delete('1.0', 'end')
+            self._tb.insert('1.0', new.strip())
+            self._fire()
+        return n
 
     def replace_at(self, start, end, new_text):
         self._tb.delete(start, end); self._tb.insert(start, new_text); self._fire()
@@ -273,6 +313,7 @@ class SpeechPanel(ctk.CTk):
         self._upd_after    = None
         self._active_card  = None
         self._f9_target    = None   # hwnd to paste into (F9 mode), or None
+        self._ph_pending   = None   # (card, token) armed for replacement
         # Vocabulary tabs (migrate old flat list → tab "1")
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
@@ -573,6 +614,12 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(hr, text='+ เพิ่มคำ', width=76, height=26, font=_f(11),
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._prompt_add_vocab).pack(side='right')
+        self._ph_btn = ctk.CTkButton(
+            hr, text=f"📌 {self._cfg.get('placeholder', 'ABC')}",
+            width=64, height=26, font=_f(10),
+            fg_color=C['card'], text_color=C['sub'],
+            hover_color=C['purple'], command=self._change_placeholder)
+        self._ph_btn.pack(side='right', padx=(0, 4))
 
         self._vocab_scroll = ctk.CTkScrollableFrame(
             vf, fg_color='transparent', height=95,
@@ -580,6 +627,17 @@ class SpeechPanel(ctk.CTk):
             scrollbar_button_hover_color=C['sub'])
         self._vocab_scroll.pack(fill='x', padx=4, pady=(0,4))
         self._refresh_vocab()
+
+    def _change_placeholder(self):
+        dlg = ctk.CTkInputDialog(
+            text=f"คำ placeholder ปัจจุบัน: {self._cfg.get('placeholder', 'ABC')}\nพิมพ์คำใหม่:",
+            title='ตั้งค่า Placeholder')
+        word = dlg.get_input()
+        if word and word.strip():
+            self._cfg['placeholder'] = word.strip()
+            _save_cfg(self._cfg)
+            self._ph_btn.configure(text=f"📌 {word.strip()}")
+            self.show_toast(f'Placeholder = "{word.strip()}" แล้ว')
 
     def _rebuild_tabs(self):
         for w in self._tab_row.winfo_children():
@@ -694,6 +752,26 @@ class SpeechPanel(ctk.CTk):
             self.show_toast(f'ลบ "{entry["right"]}" แล้ว', 'info')
 
     def _copy_vocab(self, word):
+        pad = any('a' <= ch.lower() <= 'z' for ch in word)
+        ins = f' {word} ' if pad else word
+        if self._ph_pending:
+            card, token = self._ph_pending
+            self._ph_pending = None
+            self._replace_hint.configure(text='')
+            if card in self._cards:
+                n = card.replace_token(token, ins)
+                card.clear_highlight()
+                if n:
+                    self._update_combined()
+                    self.show_toast(f'แทนที่ {token} ทั้ง {n} จุดด้วย "{word}"')
+                    return
+        for card in self._cards:
+            sel = card.get_selection()
+            if sel:
+                card.replace_at(sel[0], sel[1], ins)
+                self._update_combined()
+                self.show_toast(f'แทนที่ข้อความที่เลือกด้วย "{word}"')
+                return
         pyperclip.copy(f' {word} ')
         self.show_toast(f'📋 คัดลอก "{word}" แล้ว')
 
@@ -1118,7 +1196,31 @@ class SpeechPanel(ctk.CTk):
             except Exception: pass
         self._active_card = card; card.set_copied(True)
 
-    def _card_copy_clicked(self, card):
+    def _is_placeholder(self, word: str):
+        base = self._cfg.get('placeholder', 'ABC')
+        if not word or not base: return None
+        w = word.lower(); b = base.lower()
+        if w == b or (w.startswith(b) and len(w) == len(b) + 1
+                      and w[-1].isdigit()):
+            return word
+        return None
+
+    def _card_copy_clicked(self, card, event=None):
+        if event is not None:
+            token = self._is_placeholder(card.word_at(event))
+            if token:
+                n = card.highlight_all(token)
+                if n:
+                    if self._ph_pending and self._ph_pending[0] is not card:
+                        self._ph_pending[0].clear_highlight()
+                    self._ph_pending = (card, token)
+                    self._replace_hint.configure(
+                        text=f'📌 จะแทนที่ {token} ({n} จุด) — คลิกคำใน vocab')
+                    return
+            if self._ph_pending:
+                self._ph_pending[0].clear_highlight()
+                self._ph_pending = None
+                self._replace_hint.configure(text='')
         t = card.get_text()
         if t: pyperclip.copy(t); self._set_active_card(card)
 
