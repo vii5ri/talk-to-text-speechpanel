@@ -16,6 +16,11 @@ import speech_recognition as sr
 from deep_translator import GoogleTranslator
 import pyperclip
 import keyboard
+try:
+    import pystray
+    from PIL import Image as _PILImage
+except ImportError:
+    pystray = None
 
 # ── Layout ────────────────────────────────────────────────────────────────────
 PANEL_W    = 880
@@ -363,6 +368,7 @@ class SpeechPanel(ctk.CTk):
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
         keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle))
+        self._init_tray()
         self.bind('<space>', self._space_key)
 
     # ── Window ────────────────────────────────────────────────────────────────
@@ -482,7 +488,7 @@ class SpeechPanel(ctk.CTk):
         # Left: status text + replace hint
         _lf = ctk.CTkFrame(mz, fg_color='transparent')
         _lf.grid(row=0, column=0, sticky='nsew', padx=(0,4), pady=4)
-        self._status_lbl = ctk.CTkLabel(_lf, text='กดปุ่มหรือ Space เพื่อเริ่มพูด',
+        self._status_lbl = ctk.CTkLabel(_lf, text='กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น',
                                          font=_f(11), text_color=C['sub'],
                                          wraplength=_side_w - 8, justify='left')
         self._status_lbl.pack(anchor='w', pady=(6,2))
@@ -1031,10 +1037,47 @@ class SpeechPanel(ctk.CTk):
         self._edge_tab_hover = hz
 
     def _quit_app(self):
+        if getattr(self, '_tray', None):
+            try: self._tray.stop()
+            except Exception: pass
         self._destroy_edge_tab()
         try: keyboard.unhook_all()
         except Exception: pass
         self.destroy()
+
+    # ── System tray ───────────────────────────────────────────────────────────
+
+    def _init_tray(self):
+        self._tray = None
+        if not pystray:
+            return
+        try:
+            img = _PILImage.open(_ICON_FILE)
+        except Exception:
+            return
+        menu = pystray.Menu(
+            pystray.MenuItem('แสดง/ซ่อน',
+                             lambda: self.after(0, self._toggle_visibility),
+                             default=True),
+            pystray.MenuItem('วิธีใช้',
+                             lambda: self.after(0, self._show_help)),
+            pystray.MenuItem('ออกจากโปรแกรม',
+                             lambda: self.after(0, self._quit_app)))
+        self._tray = pystray.Icon('SpeechPanel', img, 'Speech Panel', menu)
+        threading.Thread(target=self._tray.run, daemon=True).start()
+
+    def _show_help(self):
+        messagebox.showinfo(
+            'Speech Panel — วิธีใช้',
+            'Ctrl+Shift+Space   แสดง/ซ่อนหน้าต่าง\n'
+            'Space หรือปุ่มไมค์   เริ่ม/หยุดอัดเสียง (ลงการ์ด)\n\n'
+            'F9   กดจากแอปไหนก็ได้ = เริ่มอัดเสียง\n'
+            '       กดอีกครั้ง = ข้อความพิมพ์ลงแอปนั้นทันที\n\n'
+            'คลิกการ์ด = copy ข้อความทั้งใบ\n'
+            'คลิก ABC / ABC2 ในการ์ด = เลือก token\n'
+            '       แล้วคลิกคำใน vocab เพื่อแทนที่ทุกจุด\n'
+            'ลากคลุมข้อความ + คลิกคำใน vocab = แทนที่จุดนั้น\n'
+            '📌 ปุ่มในแผงคำศัพท์ = เปลี่ยนคำ placeholder')
 
     # ── Space key ─────────────────────────────────────────────────────────────
 
