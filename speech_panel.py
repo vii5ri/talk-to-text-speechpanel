@@ -290,6 +290,8 @@ class SpeechPanel(ctk.CTk):
             self._cfg['vocab_tabs'] = self._vocab_tabs
             _save_cfg(self._cfg)
         self._active_tab: str = self._cfg.get('vocab_active_tab', '1')
+        if self._active_tab not in self._vocab_tabs:
+            self._active_tab = '1'
         self._snap_edge       = 'left'
         self._edge_tab        = None
         self._edge_tab_hover  = None
@@ -565,17 +567,9 @@ class SpeechPanel(ctk.CTk):
 
         hr = ctk.CTkFrame(vf, fg_color='transparent')
         hr.pack(fill='x', padx=6, pady=(5,2))
-        self._tab_btns: dict[str, ctk.CTkButton] = {}
-        for t in ('1', '2', '3'):
-            active = t == self._active_tab
-            btn = ctk.CTkButton(
-                hr, text=t, width=36, height=26, font=_f(11, 'bold'),
-                fg_color=C['accent'] if active else C['card'],
-                text_color='#fff' if active else C['sub'],
-                hover_color=C['purple'],
-                command=lambda tab=t: self._switch_tab(tab))
-            btn.pack(side='left', padx=(0, 3))
-            self._tab_btns[t] = btn
+        self._tab_row = ctk.CTkFrame(hr, fg_color='transparent')
+        self._tab_row.pack(side='left')
+        self._rebuild_tabs()
         ctk.CTkButton(hr, text='+ เพิ่มคำ', width=76, height=26, font=_f(11),
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._prompt_add_vocab).pack(side='right')
@@ -585,6 +579,58 @@ class SpeechPanel(ctk.CTk):
             scrollbar_button_color=C['border'],
             scrollbar_button_hover_color=C['sub'])
         self._vocab_scroll.pack(fill='x', padx=4, pady=(0,4))
+        self._refresh_vocab()
+
+    def _rebuild_tabs(self):
+        for w in self._tab_row.winfo_children():
+            w.destroy()
+        self._tab_btns: dict[str, ctk.CTkButton] = {}
+        for t in sorted(self._vocab_tabs, key=int):
+            active = t == self._active_tab
+            btn = ctk.CTkButton(
+                self._tab_row, text=t, width=36, height=26, font=_f(11, 'bold'),
+                fg_color=C['accent'] if active else C['card'],
+                text_color='#fff' if active else C['sub'],
+                hover_color=C['purple'],
+                command=lambda tab=t: self._switch_tab(tab))
+            btn.pack(side='left', padx=(0, 3))
+            self._tab_btns[t] = btn
+        ctk.CTkButton(self._tab_row, text='+', width=26, height=26,
+                      font=_f(12, 'bold'), fg_color=C['card'],
+                      text_color=C['green'], hover_color=C['purple'],
+                      command=self._add_tab).pack(side='left', padx=(2, 1))
+        ctk.CTkButton(self._tab_row, text='–', width=26, height=26,
+                      font=_f(12, 'bold'), fg_color=C['card'],
+                      text_color=C['red'], hover_color=C['del_hover'],
+                      command=self._del_tab).pack(side='left')
+
+    def _add_tab(self):
+        new = str(len(self._vocab_tabs) + 1)
+        self._vocab_tabs[new] = []
+        self._cfg['vocab_tabs'] = self._vocab_tabs
+        self._active_tab = new
+        self._cfg['vocab_active_tab'] = new
+        _save_cfg(self._cfg)
+        self._rebuild_tabs()
+        self._refresh_vocab()
+
+    def _del_tab(self):
+        if len(self._vocab_tabs) <= 1:
+            self.show_toast('ต้องมีอย่างน้อย 1 tab', 'error')
+            return
+        n = len(self._vocab_tabs[self._active_tab])
+        if not messagebox.askyesno('ลบ tab',
+                f'ลบ tab {self._active_tab} พร้อมคำ {n} คำ?'):
+            return
+        del self._vocab_tabs[self._active_tab]
+        keys = sorted(self._vocab_tabs, key=int)
+        self._vocab_tabs = {str(i + 1): self._vocab_tabs[k]
+                            for i, k in enumerate(keys)}
+        self._active_tab = '1'
+        self._cfg['vocab_tabs'] = self._vocab_tabs
+        self._cfg['vocab_active_tab'] = self._active_tab
+        _save_cfg(self._cfg)
+        self._rebuild_tabs()
         self._refresh_vocab()
 
     def _switch_tab(self, tab: str):
