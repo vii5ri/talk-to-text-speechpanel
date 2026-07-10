@@ -35,8 +35,8 @@ Three improvements to the vocab/dictionary system:
 - **–** deletes the *active* tab after `messagebox.askyesno` confirmation that
   states the word count (e.g. "ลบ tab 2 พร้อมคำ 5 คำ?").
   - Refused (toast) when only 1 tab remains.
-  - After deletion keys are renumbered contiguously `1..N`; active tab moves
-    to the previous tab (or `1`).
+  - After deletion keys are renumbered contiguously `1..N`; active tab resets
+    to `1`.
 - Config schema unchanged (`vocab_tabs: dict[str, list[dict]]`) — only the
   fixed-3 assumption is removed. `vocab_active_tab` clamped to an existing key
   at load.
