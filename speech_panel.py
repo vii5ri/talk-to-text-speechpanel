@@ -22,6 +22,7 @@ PANEL_W    = 880
 PANEL_H    = 980
 LEFT_W     = 520
 HOTKEY     = 'ctrl+shift+space'
+DICTATE_KEY = 'f9'
 SAMPLERATE = 16000
 BLOCKSIZE  = 1024
 SEP        = ' '
@@ -267,6 +268,7 @@ class SpeechPanel(ctk.CTk):
         self._replace_sel  = None
         self._upd_after    = None
         self._active_card  = None
+        self._f9_target    = None   # hwnd to paste into (F9 mode), or None
         # Vocabulary tabs (migrate old flat list → tab "1")
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
@@ -298,6 +300,7 @@ class SpeechPanel(ctk.CTk):
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
+        keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle))
         self.bind('<space>', self._space_key)
 
     # ── Window ────────────────────────────────────────────────────────────────
@@ -896,6 +899,48 @@ class SpeechPanel(ctk.CTk):
         if isinstance(self.focus_get(), tk.Text): return
         self._toggle_rec(); return 'break'
 
+    # ── F9 direct dictation ───────────────────────────────────────────────────
+
+    def _f9_toggle(self):
+        if self._recording:
+            if self._f9_target is None:
+                self.show_toast('กำลังอัดโหมดปกติอยู่ — ใช้ F9 ไม่ได้', 'error')
+                return
+            self._stop_rec()
+            return
+        u = ctypes.windll.user32
+        hwnd = u.GetForegroundWindow()
+        own = u.GetAncestor(self.winfo_id(), 2)   # GA_ROOT
+        self._f9_target = hwnd if (hwnd and hwnd != own) else None
+        self._start_rec()
+        if self._f9_target:
+            buf = ctypes.create_unicode_buffer(64)
+            u.GetWindowTextW(self._f9_target, buf, 64)
+            self._set_status(f'🔴 F9 — กำลังฟัง จะพิมพ์ลง {buf.value or "แอปเป้าหมาย"}')
+
+    def _paste_to_target(self, text: str):
+        u = ctypes.windll.user32
+        target, self._f9_target = self._f9_target, None
+        if not u.IsWindow(target):
+            self.show_toast('หน้าต่างเป้าหมายถูกปิดแล้ว — เก็บลงการ์ดอย่างเดียว', 'info')
+            return
+        def _worker():
+            try: old = pyperclip.paste()
+            except Exception: old = None
+            if u.GetForegroundWindow() != target:
+                u.SetForegroundWindow(target)
+                time.sleep(0.15)
+            if u.GetForegroundWindow() != target:
+                self.after(0, lambda: self.show_toast(
+                    'สลับไปหน้าต่างเป้าหมายไม่ได้ — เก็บลงการ์ดอย่างเดียว', 'info'))
+                return
+            pyperclip.copy(text)
+            keyboard.send('ctrl+v')
+            time.sleep(0.15)
+            if old is not None:
+                pyperclip.copy(old)
+        threading.Thread(target=_worker, daemon=True).start()
+
     # ── Partial display ───────────────────────────────────────────────────────
 
     def _set_partial(self, text: str):
@@ -949,8 +994,12 @@ class SpeechPanel(ctk.CTk):
         return _apply_pairs(text, pairs) if pairs else text
 
     def _finish_text(self, text: str):
-        if not text: self._set_status('ไม่ได้ยิน'); return
+        if not text:
+            self._f9_target = None
+            self._set_status('ไม่ได้ยิน'); return
         text = self._apply_dictionary(text)
+        if self._f9_target:
+            self._paste_to_target(text)
         if self._replace_card and self._replace_sel:
             c, s, e_ = self._replace_card, *self._replace_sel
             def do():
@@ -1005,6 +1054,7 @@ class SpeechPanel(ctk.CTk):
 
     def _rec_err(self, msg):
         self._recording = False; self._replace_card = None
+        self._f9_target = None
         self._common_stop_ui()
         self._set_status(f'⚠️ {msg}')
 
