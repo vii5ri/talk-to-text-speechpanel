@@ -117,6 +117,21 @@ def _apply_pairs(text: str, pairs: list) -> str:
         text = text.replace('  ', ' ')
     return text.strip()
 
+def _canon_tokens(text: str, base: str) -> str:
+    """Normalize spaced placeholder tokens the STT splits apart:
+    'A B C 1' / 'ABC 1' / 'abc1' → ' ABC1 ' (canonical, space-separated)."""
+    if not base:
+        return text
+    chars = [c for c in base if c != ' ']
+    pat = (r'(?<![A-Za-z])' + r'\s*'.join(re.escape(c) for c in chars)
+           + r'\s*(\d)?(?![A-Za-z0-9])')
+    def _sub(m):
+        return f' {base}{m.group(1) or ""} '
+    text = re.sub(pat, _sub, text, flags=re.IGNORECASE)
+    while '  ' in text:
+        text = text.replace('  ', ' ')
+    return text.strip()
+
 # ── Palette ───────────────────────────────────────────────────────────────────
 _DARK = dict(bg='#0f172a', header='#1e293b', card='#1e293b', card2='#0f172a',
              combined='#060d17', accent='#3b82f6', purple='#7c3aed',
@@ -1126,6 +1141,7 @@ class SpeechPanel(ctk.CTk):
             self._f9_target = None
             self._set_status('ไม่ได้ยิน'); return
         text = self._apply_dictionary(text)
+        text = _canon_tokens(text, self._cfg.get('placeholder', 'ABC'))
         if self._f9_target:
             self._paste_to_target(text)
         if self._replace_card and self._replace_sel:
