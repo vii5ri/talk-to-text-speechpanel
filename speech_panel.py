@@ -135,6 +135,45 @@ class Toast(ctk.CTkFrame):
         self.after(2200, self.destroy)
 
 
+# ── Add-vocab dialog ──────────────────────────────────────────────────────────
+class AddVocabDialog(ctk.CTkToplevel):
+    """Two fields: wrong word (optional) + right word (required).
+    After close, .result is (wrong, right) or None if cancelled."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.result = None
+        self.title('เพิ่มคำศัพท์')
+        self.geometry('360x200')
+        self.resizable(False, False)
+        self.attributes('-topmost', True)
+        self.grab_set()
+        ctk.CTkLabel(self, text='คำที่ถอดผิด (เว้นว่างได้):', font=_f(12)
+                     ).pack(anchor='w', padx=16, pady=(12, 2))
+        self._wrong_e = ctk.CTkEntry(self, font=_f(13))
+        self._wrong_e.pack(fill='x', padx=16)
+        ctk.CTkLabel(self, text='คำที่ถูกต้อง:', font=_f(12)
+                     ).pack(anchor='w', padx=16, pady=(8, 2))
+        self._right_e = ctk.CTkEntry(self, font=_f(13))
+        self._right_e.pack(fill='x', padx=16)
+        br = ctk.CTkFrame(self, fg_color='transparent')
+        br.pack(fill='x', padx=16, pady=12)
+        ctk.CTkButton(br, text='บันทึก', width=90, font=_f(12),
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      command=self._save).pack(side='right', padx=(6, 0))
+        ctk.CTkButton(br, text='ยกเลิก', width=90, font=_f(12),
+                      fg_color=C['card'], hover_color=C['border'],
+                      command=self.destroy).pack(side='right')
+        self._right_e.bind('<Return>', lambda e: self._save())
+        self._wrong_e.focus_set()
+
+    def _save(self):
+        right = self._right_e.get().strip()
+        if not right:
+            return
+        self.result = (self._wrong_e.get().strip(), right)
+        self.destroy()
+
+
 # ── Segment card ──────────────────────────────────────────────────────────────
 class SegmentCard(ctk.CTkFrame):
     def __init__(self, parent, text, seg_id, *,
@@ -555,47 +594,51 @@ class SpeechPanel(ctk.CTk):
     def _refresh_vocab(self):
         for w in self._vocab_scroll.winfo_children():
             w.destroy()
-        words = self._vocab_tabs.get(self._active_tab, [])
-        if not words:
+        entries = self._vocab_tabs.get(self._active_tab, [])
+        if not entries:
             ctk.CTkLabel(self._vocab_scroll,
                          text='ยังไม่มีคำ — กด "+ เพิ่มคำ" เพื่อใส่คำที่ถูกต้อง',
                          font=_f(10), text_color=C['sub']).pack(pady=6)
             return
-        for word in words:
+        for entry in entries:
+            label = (f"{entry['wrong']} → {entry['right']}"
+                     if entry['wrong'] else entry['right'])
             row = ctk.CTkFrame(self._vocab_scroll, fg_color='transparent')
             row.pack(fill='x', pady=1)
-            ctk.CTkButton(row, text=word, font=_f(13), anchor='w',
+            ctk.CTkButton(row, text=label, font=_f(13), anchor='w',
                           fg_color=C['card2'], hover_color=C['accent'],
                           text_color=C['text'],
-                          command=lambda w=word: self._copy_vocab(w)
+                          command=lambda w=entry['right']: self._copy_vocab(w)
                           ).pack(side='left', fill='x', expand=True, padx=(0,3))
             ctk.CTkButton(row, text='🗑', width=34, height=30,
                           font=ctk.CTkFont(size=15), fg_color='transparent',
                           hover_color=C['del_hover'],
-                          command=lambda w=word: self._delete_vocab(w)
+                          command=lambda en=entry: self._delete_vocab(en)
                           ).pack(side='right')
 
     def _prompt_add_vocab(self):
-        dialog = ctk.CTkInputDialog(text='พิมพ์คำที่ต้องการเพิ่ม:', title='เพิ่มคำศัพท์')
-        word = dialog.get_input()
-        if word and word.strip():
-            w = word.strip()
-            tab = self._vocab_tabs[self._active_tab]
-            if w not in tab:
-                tab.append(w)
-                self._cfg['vocab_tabs'] = self._vocab_tabs
-                _save_cfg(self._cfg)
-                self._refresh_vocab()
-                self.show_toast(f'เพิ่ม "{w}" แล้ว')
-
-    def _delete_vocab(self, word):
+        dlg = AddVocabDialog(self)
+        self.wait_window(dlg)
+        if not dlg.result:
+            return
+        wrong, right = dlg.result
         tab = self._vocab_tabs[self._active_tab]
-        if word in tab:
-            tab.remove(word)
+        if any(e['wrong'] == wrong and e['right'] == right for e in tab):
+            return
+        tab.append({'wrong': wrong, 'right': right})
+        self._cfg['vocab_tabs'] = self._vocab_tabs
+        _save_cfg(self._cfg)
+        self._refresh_vocab()
+        self.show_toast(f'เพิ่ม "{right}" แล้ว')
+
+    def _delete_vocab(self, entry):
+        tab = self._vocab_tabs[self._active_tab]
+        if entry in tab:
+            tab.remove(entry)
             self._cfg['vocab_tabs'] = self._vocab_tabs
             _save_cfg(self._cfg)
             self._refresh_vocab()
-            self.show_toast(f'ลบ "{word}" แล้ว', 'info')
+            self.show_toast(f'ลบ "{entry["right"]}" แล้ว', 'info')
 
     def _copy_vocab(self, word):
         pyperclip.copy(f' {word} ')
