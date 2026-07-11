@@ -22,6 +22,19 @@ try:
 except ImportError:
     pystray = None
 
+# Add pip-installed NVIDIA CUDA DLLs to PATH before importing faster-whisper
+try:
+    import site as _site
+    for _sp in _site.getsitepackages():
+        for _pkg in ('cublas', 'cudnn', 'cuda_runtime', 'cuda_nvrtc', 'cusolver', 'cusparse'):
+            _d = os.path.join(_sp, 'nvidia', _pkg, 'bin')
+            if os.path.isdir(_d) and _d not in os.environ.get('PATH', ''):
+                os.environ['PATH'] = _d + os.pathsep + os.environ['PATH']
+                try: os.add_dll_directory(_d)
+                except Exception: pass
+except Exception:
+    pass
+
 try:
     from faster_whisper import WhisperModel as _WhisperModel
 except ImportError:
@@ -1214,13 +1227,6 @@ class SpeechPanel(ctk.CTk):
     def _load_whisper(self):
         try:
             self.after(0, lambda: self._set_status('⏳ กำลังโหลด Whisper model...'))
-            # Add pip-installed NVIDIA CUDA DLL dirs to Windows DLL search path
-            import site
-            for sp in site.getsitepackages():
-                for pkg in ('cublas', 'cudnn', 'cuda_runtime', 'cuda_nvrtc'):
-                    dll_dir = os.path.join(sp, 'nvidia', pkg, 'bin')
-                    if os.path.isdir(dll_dir):
-                        os.add_dll_directory(dll_dir)
             self._whisper = _WhisperModel(
                 WHISPER_MODEL_SIZE, device='cuda', compute_type='float16')
             self.after(0, lambda: self._set_status(
