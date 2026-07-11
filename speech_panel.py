@@ -1214,11 +1214,18 @@ class SpeechPanel(ctk.CTk):
     def _load_whisper(self):
         try:
             self.after(0, lambda: self._set_status('⏳ กำลังโหลด Whisper model...'))
+            # Add pip-installed NVIDIA CUDA DLL dirs to Windows DLL search path
+            import site
+            for sp in site.getsitepackages():
+                for pkg in ('cublas', 'cudnn', 'cuda_runtime', 'cuda_nvrtc'):
+                    dll_dir = os.path.join(sp, 'nvidia', pkg, 'bin')
+                    if os.path.isdir(dll_dir):
+                        os.add_dll_directory(dll_dir)
             self._whisper = _WhisperModel(
                 WHISPER_MODEL_SIZE, device='cuda', compute_type='float16')
             self.after(0, lambda: self._set_status(
                 'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
-        except Exception as e:
+        except Exception as err:
             self._whisper = None
             self.after(0, lambda: self._set_status(
                 'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
