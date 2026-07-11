@@ -112,7 +112,6 @@ class Api:
                 def _move_offscreen():
                     try:
                         _win.move(-9999, -9999)
-                        _win.resize(1, 1)
                     except Exception:
                         pass
                 threading.Timer(0.4, _move_offscreen).start()
