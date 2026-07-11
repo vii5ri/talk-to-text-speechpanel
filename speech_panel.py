@@ -399,7 +399,6 @@ class SpeechPanel(ctk.CTk):
         self._whisper_lock = threading.Lock()
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
-        threading.Thread(target=self._start_live_proc, daemon=True).start()
 
     # ── Window ────────────────────────────────────────────────────────────────
 
@@ -505,6 +504,17 @@ class SpeechPanel(ctk.CTk):
                                command=lambda c=code: setattr(self,'_lang',c),
                                font=_f(12), fg_color=C['accent']).pack(side='left', padx=(0,10))
 
+        # STT engine selector
+        er = ctk.CTkFrame(left, fg_color=C['bg'])
+        er.pack(fill='x', padx=4, pady=(0,2))
+        _init_engine = '🌐 Google' if self._cfg.get('stt_engine', 'google') == 'google' else '🤖 Whisper GPU'
+        self._engine_btn = ctk.CTkSegmentedButton(
+            er, values=['🌐 Google', '🤖 Whisper GPU'],
+            command=self._set_engine,
+            font=_f(11), height=26,
+            selected_color=C['accent'], selected_hover_color=C['purple'])
+        self._engine_btn.set(_init_engine)
+        self._engine_btn.pack(fill='x', padx=4)
 
         # Mic zone: status LEFT | mic CENTER (fixed) | timer RIGHT
         # Both side columns have equal uniform minsize so mic never shifts
@@ -1201,25 +1211,11 @@ class SpeechPanel(ctk.CTk):
             self._replace_hint.configure(text=f'📌 แทนที่ใน #{self._replace_card.seg_id}')
         else:
             self._set_status('🔴 กำลังฟัง... กด Space หรือ ⏹ เพื่อหยุด')
-        self._live_buf = []
         self._tick()
-        if self._whisper:
-            self._start_free()
-            threading.Thread(target=self._whisper_preview_loop, daemon=True).start()
-        elif self._live_ready:
-            self._start_live()
-        else:
-            self._start_free()
+        self._start_free()
 
     def _stop_rec(self):
-        if self._whisper:
-            self._stop_free()
-        elif self._live_ready:
-            self._recording = False
-            self._set_status('⏳ รอผลสุดท้าย...')
-            self._stop_live()
-        else:
-            self._stop_free()
+        self._stop_free()
 
     def _common_stop_ui(self):
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
@@ -1263,104 +1259,14 @@ class SpeechPanel(ctk.CTk):
             self.after(0, lambda: self._set_status(
                 'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
 
-    # ── Live mode (Web Speech API via pywebview subprocess) ───────────────────
+    def _set_engine(self, val: str):
+        engine = 'whisper' if 'Whisper' in val else 'google'
+        self._cfg['stt_engine'] = engine
+        _save_cfg(self._cfg)
+        if engine == 'whisper' and not self._whisper:
+            self._set_status('⏳ Whisper กำลังโหลด...')
 
-    _WORKER = os.path.join(_BASE, 'stt_worker.py')
-
-    def _whisper_preview_loop(self):
-        CHUNK_SECS = 2.0
-        min_new = int(CHUNK_SECS * SAMPLERATE)
-        processed = 0
-        lang = _WHISPER_LANG.get(self._lang, 'th')
-        while self._recording:
-            time.sleep(0.4)
-            chunks = list(self._audio_chunks)
-            if not chunks:
-                continue
-            combined = np.concatenate(chunks, axis=0)
-            new_samples = len(combined) - processed
-            if new_samples < min_new:
-                continue
-            chunk = combined[processed : processed + new_samples]
-            processed += new_samples
-            audio_f32 = chunk.flatten().astype(np.float32) / 32768.0
-            try:
-                with self._whisper_lock:
-                    segs, _ = self._whisper.transcribe(
-                        audio_f32, language=lang, beam_size=1, vad_filter=True,
-                        vad_parameters=dict(min_silence_duration_ms=300))
-                text = ''.join(s.text.strip() for s in segs).strip()
-                if text:
-                    self._live_buf.append(text)
-                    preview = ''.join(self._live_buf)
-                    self.after(0, lambda t=preview: self._set_partial(t))
-            except Exception:
-                pass
-
-    def _start_live_proc(self):
-        """Start the stt_worker subprocess once at app launch and keep it alive."""
-        if not os.path.exists(self._WORKER):
-            return
-        try:
-            self._live_proc = subprocess.Popen(
-                [sys.executable, self._WORKER],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                text=True, bufsize=1, encoding='utf-8')
-            threading.Thread(target=self._read_live_proc, daemon=True).start()
-        except Exception:
-            self._live_proc = None
-
-    def _read_live_proc(self):
-        """Continuously read JSON lines from stt_worker stdout."""
-        for line in self._live_proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                data = json.loads(line)
-                t = data.get('type')
-                text = data.get('text', '')
-                if t == 'ready':
-                    self._live_ready = True
-                elif t == 'interim' and self._recording:
-                    self.after(0, lambda txt=text: self._set_partial(txt))
-                elif t == 'final' and self._recording:
-                    self._live_buf.append(text)
-                    combined = ''.join(self._live_buf)
-                    self.after(0, lambda txt=combined: self._set_partial(txt))
-                elif t == 'end' and not self._recording:
-                    self.after(0, self._finish_live)
-                elif t == 'error' and self._recording:
-                    self.after(0, lambda e=text: self._rec_err(f'STT: {e}'))
-            except Exception:
-                pass
-
-    def _send_live(self, obj: dict):
-        if self._live_proc and self._live_proc.poll() is None:
-            try:
-                self._live_proc.stdin.write(json.dumps(obj) + '\n')
-                self._live_proc.stdin.flush()
-            except Exception:
-                pass
-
-    def _start_live(self):
-        self._live_buf = []
-        self._send_live({'action': 'start', 'lang': self._lang})
-
-    def _stop_live(self):
-        self._send_live({'action': 'stop'})
-        # _finish_live() will be called when 'end' event arrives
-
-    def _finish_live(self):
-        text = ''.join(self._live_buf).strip()
-        self._set_partial('')
-        self._common_stop_ui()
-        if text:
-            self._finish_text(text)
-        else:
-            self._set_status('ไม่ได้ยิน')
-
-    # ── Free mode (batch STT) ─────────────────────────────────────────────────
+    # ── Batch STT ─────────────────────────────────────────────────────────────
 
     def _start_free(self):
         def _cb(indata, frames, t, status):
@@ -1383,15 +1289,15 @@ class SpeechPanel(ctk.CTk):
             if not self._audio_chunks:
                 self.after(0, lambda: self._set_status('ไม่มีเสียง')); return
             raw = np.concatenate(self._audio_chunks, axis=0)
-            if self._whisper:
-                self.after(0, lambda: self._set_partial(''))
+            use_whisper = (self._cfg.get('stt_engine', 'google') == 'whisper'
+                           and self._whisper)
+            if use_whisper:
                 audio_f32 = raw.flatten().astype(np.float32) / 32768.0
                 lang = _WHISPER_LANG.get(self._lang, 'th')
-                with self._whisper_lock:
-                    segments, _ = self._whisper.transcribe(
-                        audio_f32, language=lang, beam_size=5,
-                        vad_filter=True,
-                        vad_parameters=dict(min_silence_duration_ms=500))
+                segments, _ = self._whisper.transcribe(
+                    audio_f32, language=lang, beam_size=5,
+                    vad_filter=True,
+                    vad_parameters=dict(min_silence_duration_ms=500))
                 text = ' '.join(seg.text.strip() for seg in segments).strip()
             else:
                 buf = io.BytesIO()
