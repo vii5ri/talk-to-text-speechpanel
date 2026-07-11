@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 Hidden pywebview subprocess — Web Speech API real-time STT.
-Communicates with parent via JSON lines on stdin/stdout.
-  stdin  ← {"action":"start","lang":"th-TH"} | {"action":"stop"} | {"action":"quit"}
-  stdout → {"type":"interim","text":"..."} | {"type":"final","text":"..."} | {"type":"end"} | {"type":"ready"}
+Serves HTML from localhost so Edge WebView2 treats it as secure context.
+  stdin  <- {"action":"start","lang":"th-TH"} | {"action":"stop"} | {"action":"quit"}
+  stdout -> {"type":"interim","text":"..."} | {"type":"final","text":"..."} | {"type":"end"} | {"type":"ready"}
 """
-import sys, json, threading
+import sys, json, threading, socket, http.server
 import webview
 
-STT_HTML = """<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>
+STT_HTML = b"""<!DOCTYPE html><html><head><meta charset='utf-8'></head><body>
 <script>
 var recog = null;
 function init() {
@@ -44,15 +44,37 @@ function stop() { if (recog) try { recog.stop(); } catch(e) {} }
 </script></body></html>"""
 
 
+def _free_port():
+    with socket.socket() as s:
+        s.bind(('127.0.0.1', 0))
+        return s.getsockname()[1]
+
+
+def _serve(port):
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html; charset=utf-8')
+            self.send_header('Content-Length', str(len(STT_HTML)))
+            self.end_headers()
+            self.wfile.write(STT_HTML)
+        def log_message(self, *a): pass
+
+    http.server.HTTPServer(('127.0.0.1', port), H).serve_forever()
+
+
 class Api:
     def on_data(self, s):
         print(s, flush=True)
 
 
 def main():
+    port = _free_port()
+    threading.Thread(target=_serve, args=(port,), daemon=True).start()
+
     api = Api()
     win = webview.create_window(
-        'STT-Worker', html=STT_HTML, js_api=api,
+        'STT-Worker', url=f'http://127.0.0.1:{port}/', js_api=api,
         width=1, height=1, x=-9999, y=-9999, frameless=True)
 
     def read_stdin():
@@ -64,7 +86,7 @@ def main():
                 cmd = json.loads(line)
                 act = cmd.get('action')
                 if act == 'start':
-                    win.evaluate_js(f"start('{cmd.get('lang','th-TH')}')")
+                    win.evaluate_js(f"start('{cmd.get('lang', 'th-TH')}')")
                 elif act == 'stop':
                     win.evaluate_js('stop()')
                 elif act == 'quit':
@@ -73,7 +95,6 @@ def main():
                 print(json.dumps({'type': 'error', 'text': str(e)}), flush=True)
 
     def on_loaded():
-        # Signal parent that webview is ready
         print(json.dumps({'type': 'ready'}), flush=True)
 
     win.events.loaded += on_loaded
