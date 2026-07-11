@@ -396,6 +396,7 @@ class SpeechPanel(ctk.CTk):
         self._init_tray()
         self.bind('<space>', self._space_key)
         self._whisper = None
+        self._whisper_lock = threading.Lock()
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
         threading.Thread(target=self._start_live_proc, daemon=True).start()
@@ -1200,14 +1201,20 @@ class SpeechPanel(ctk.CTk):
             self._replace_hint.configure(text=f'📌 แทนที่ใน #{self._replace_card.seg_id}')
         else:
             self._set_status('🔴 กำลังฟัง... กด Space หรือ ⏹ เพื่อหยุด')
+        self._live_buf = []
         self._tick()
-        if self._live_ready:
+        if self._whisper:
+            self._start_free()
+            threading.Thread(target=self._whisper_preview_loop, daemon=True).start()
+        elif self._live_ready:
             self._start_live()
         else:
             self._start_free()
 
     def _stop_rec(self):
-        if self._live_ready:
+        if self._whisper:
+            self._stop_free()
+        elif self._live_ready:
             self._recording = False
             self._set_status('⏳ รอผลสุดท้าย...')
             self._stop_live()
@@ -1259,6 +1266,36 @@ class SpeechPanel(ctk.CTk):
     # ── Live mode (Web Speech API via pywebview subprocess) ───────────────────
 
     _WORKER = os.path.join(_BASE, 'stt_worker.py')
+
+    def _whisper_preview_loop(self):
+        CHUNK_SECS = 2.0
+        min_new = int(CHUNK_SECS * SAMPLERATE)
+        processed = 0
+        lang = _WHISPER_LANG.get(self._lang, 'th')
+        while self._recording:
+            time.sleep(0.4)
+            chunks = list(self._audio_chunks)
+            if not chunks:
+                continue
+            combined = np.concatenate(chunks, axis=0)
+            new_samples = len(combined) - processed
+            if new_samples < min_new:
+                continue
+            chunk = combined[processed : processed + new_samples]
+            processed += new_samples
+            audio_f32 = chunk.flatten().astype(np.float32) / 32768.0
+            try:
+                with self._whisper_lock:
+                    segs, _ = self._whisper.transcribe(
+                        audio_f32, language=lang, beam_size=1, vad_filter=True,
+                        vad_parameters=dict(min_silence_duration_ms=300))
+                text = ''.join(s.text.strip() for s in segs).strip()
+                if text:
+                    self._live_buf.append(text)
+                    preview = ''.join(self._live_buf)
+                    self.after(0, lambda t=preview: self._set_partial(t))
+            except Exception:
+                pass
 
     def _start_live_proc(self):
         """Start the stt_worker subprocess once at app launch and keep it alive."""
@@ -1347,12 +1384,14 @@ class SpeechPanel(ctk.CTk):
                 self.after(0, lambda: self._set_status('ไม่มีเสียง')); return
             raw = np.concatenate(self._audio_chunks, axis=0)
             if self._whisper:
+                self.after(0, lambda: self._set_partial(''))
                 audio_f32 = raw.flatten().astype(np.float32) / 32768.0
                 lang = _WHISPER_LANG.get(self._lang, 'th')
-                segments, _ = self._whisper.transcribe(
-                    audio_f32, language=lang, beam_size=5,
-                    vad_filter=True,
-                    vad_parameters=dict(min_silence_duration_ms=500))
+                with self._whisper_lock:
+                    segments, _ = self._whisper.transcribe(
+                        audio_f32, language=lang, beam_size=5,
+                        vad_filter=True,
+                        vad_parameters=dict(min_silence_duration_ms=500))
                 text = ' '.join(seg.text.strip() for seg in segments).strip()
             else:
                 buf = io.BytesIO()
