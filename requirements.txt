@@ -6,4 +6,3 @@ deep-translator
 pyperclip
 keyboard
 google-cloud-speech
-pythainlp

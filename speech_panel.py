@@ -137,19 +137,6 @@ def _canon_tokens(text: str, base: str) -> str:
         text = text.replace('  ', ' ')
     return text.strip()
 
-def _thai_segment(text: str) -> str:
-    """Add word-boundary spaces to Thai text (newmm engine). Falls back to
-    original text if pythainlp is not installed."""
-    try:
-        from pythainlp.tokenize import word_tokenize
-        tokens = word_tokenize(text, engine='newmm', keep_whitespace=False)
-        result = ' '.join(t for t in tokens if t.strip())
-        while '  ' in result:
-            result = result.replace('  ', ' ')
-        return result.strip()
-    except Exception:
-        return text
-
 # ── Palette ───────────────────────────────────────────────────────────────────
 _DARK = dict(bg='#0f172a', header='#1e293b', card='#1e293b', card2='#0f172a',
              combined='#060d17', accent='#3b82f6', purple='#7c3aed',
@@ -1196,8 +1183,6 @@ class SpeechPanel(ctk.CTk):
         if not text:
             self._f9_target = None
             self._set_status('ไม่ได้ยิน'); return
-        if self._lang == 'th-TH':
-            text = _thai_segment(text)
         text = self._apply_dictionary(text)
         text = _canon_tokens(text, self._cfg.get('placeholder', 'ABC'))
         if self._f9_target:
