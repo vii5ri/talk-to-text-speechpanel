@@ -5,7 +5,7 @@ Speech Panel v2 — Thai / English Speech-to-Text
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
 """
 import threading, io, wave, time, json, re
-import os, sys, webbrowser
+import os, sys, webbrowser, subprocess
 import datetime, traceback, ctypes
 import tkinter as tk
 from tkinter import messagebox
@@ -356,6 +356,9 @@ class SpeechPanel(ctk.CTk):
         self._active_card  = None
         self._f9_target    = None   # hwnd to paste into (F9 mode), or None
         self._ph_pending   = None   # (card, token) armed for replacement
+        self._live_proc    = None   # stt_worker subprocess
+        self._live_buf     = []     # accumulated final segments
+        self._live_ready   = False  # webview finished loading
         # Vocabulary tabs (migrate old flat list → tab "1")
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
@@ -395,6 +398,7 @@ class SpeechPanel(ctk.CTk):
         self._whisper = None
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
+        threading.Thread(target=self._start_live_proc, daemon=True).start()
 
     # ── Window ────────────────────────────────────────────────────────────────
 
@@ -1068,6 +1072,14 @@ class SpeechPanel(ctk.CTk):
         self._destroy_edge_tab()
         try: keyboard.unhook_all()
         except Exception: pass
+        if getattr(self, '_live_proc', None) and self._live_proc.poll() is None:
+            try:
+                self._live_proc.stdin.write(json.dumps({'action': 'quit'}) + '\n')
+                self._live_proc.stdin.flush()
+                self._live_proc.wait(timeout=2)
+            except Exception:
+                try: self._live_proc.terminate()
+                except Exception: pass
         self.destroy()
 
     # ── System tray ───────────────────────────────────────────────────────────
@@ -1189,10 +1201,18 @@ class SpeechPanel(ctk.CTk):
         else:
             self._set_status('🔴 กำลังฟัง... กด Space หรือ ⏹ เพื่อหยุด')
         self._tick()
-        self._start_free()
+        if self._live_ready:
+            self._start_live()
+        else:
+            self._start_free()
 
     def _stop_rec(self):
-        self._stop_free()
+        if self._live_ready:
+            self._recording = False
+            self._set_status('⏳ รอผลสุดท้าย...')
+            self._stop_live()
+        else:
+            self._stop_free()
 
     def _common_stop_ui(self):
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
@@ -1235,6 +1255,73 @@ class SpeechPanel(ctk.CTk):
             self._whisper = None
             self.after(0, lambda: self._set_status(
                 'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+
+    # ── Live mode (Web Speech API via pywebview subprocess) ───────────────────
+
+    _WORKER = os.path.join(_BASE, 'stt_worker.py')
+
+    def _start_live_proc(self):
+        """Start the stt_worker subprocess once at app launch and keep it alive."""
+        if not os.path.exists(self._WORKER):
+            return
+        try:
+            self._live_proc = subprocess.Popen(
+                [sys.executable, self._WORKER],
+                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                text=True, bufsize=1, encoding='utf-8')
+            threading.Thread(target=self._read_live_proc, daemon=True).start()
+        except Exception:
+            self._live_proc = None
+
+    def _read_live_proc(self):
+        """Continuously read JSON lines from stt_worker stdout."""
+        for line in self._live_proc.stdout:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+                t = data.get('type')
+                text = data.get('text', '')
+                if t == 'ready':
+                    self._live_ready = True
+                elif t == 'interim' and self._recording:
+                    self.after(0, lambda txt=text: self._set_partial(txt))
+                elif t == 'final' and self._recording:
+                    self._live_buf.append(text)
+                    combined = ''.join(self._live_buf)
+                    self.after(0, lambda txt=combined: self._set_partial(txt))
+                elif t == 'end' and not self._recording:
+                    self.after(0, self._finish_live)
+                elif t == 'error' and self._recording:
+                    self.after(0, lambda e=text: self._rec_err(f'STT: {e}'))
+            except Exception:
+                pass
+
+    def _send_live(self, obj: dict):
+        if self._live_proc and self._live_proc.poll() is None:
+            try:
+                self._live_proc.stdin.write(json.dumps(obj) + '\n')
+                self._live_proc.stdin.flush()
+            except Exception:
+                pass
+
+    def _start_live(self):
+        self._live_buf = []
+        self._send_live({'action': 'start', 'lang': self._lang})
+
+    def _stop_live(self):
+        self._send_live({'action': 'stop'})
+        # _finish_live() will be called when 'end' event arrives
+
+    def _finish_live(self):
+        text = ''.join(self._live_buf).strip()
+        self._set_partial('')
+        self._common_stop_ui()
+        if text:
+            self._finish_text(text)
+        else:
+            self._set_status('ไม่ได้ยิน')
 
     # ── Free mode (batch STT) ─────────────────────────────────────────────────
 
