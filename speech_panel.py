@@ -485,6 +485,16 @@ class SpeechPanel(ctk.CTk):
             fg_color=C['card2'], button_color=C['accent'],
             button_hover_color=C['purple'], text_color=C['text'])
         self._ai_menu.pack(side='right', padx=(4, 2), pady=5)
+        # STT engine dropdown (left of AI Chat)
+        _init_engine = '🌐 Google' if self._cfg.get('stt_engine', 'google') == 'google' else '🤖 Whisper GPU'
+        self._engine_menu = ctk.CTkOptionMenu(
+            hdr, values=['🌐 Google', '🤖 Whisper GPU'],
+            command=self._set_engine,
+            width=148, height=34, font=_f(10),
+            fg_color=C['card2'], button_color=C['accent'],
+            button_hover_color=C['purple'], text_color=C['text'])
+        self._engine_menu.set(_init_engine)
+        self._engine_menu.pack(side='right', padx=(4, 6), pady=5)
 
         # Body
         body = ctk.CTkFrame(self, fg_color=C['bg'], corner_radius=0)
@@ -503,21 +513,6 @@ class SpeechPanel(ctk.CTk):
             ctk.CTkRadioButton(tr, text=lbl, variable=self._lang_var, value=val,
                                command=lambda c=code: setattr(self,'_lang',c),
                                font=_f(12), fg_color=C['accent']).pack(side='left', padx=(0,10))
-
-        # STT engine selector
-        er = ctk.CTkFrame(left, fg_color=C['bg'])
-        er.pack(fill='x', padx=4, pady=(0,2))
-        ctk.CTkLabel(er, text='STT Engine:', font=_f(11),
-                     text_color=C['sub']).pack(side='left', padx=(4,6))
-        _init_engine = '🌐 Google' if self._cfg.get('stt_engine', 'google') == 'google' else '🤖 Whisper GPU'
-        self._engine_menu = ctk.CTkOptionMenu(
-            er, values=['🌐 Google', '🤖 Whisper GPU'],
-            command=self._set_engine,
-            font=_f(11), height=26,
-            fg_color=C['card'], button_color=C['accent'],
-            button_hover_color=C['purple'])
-        self._engine_menu.set(_init_engine)
-        self._engine_menu.pack(side='left', padx=(0,4))
 
         # Mic zone: status LEFT | mic CENTER (fixed) | timer RIGHT
         # Both side columns have equal uniform minsize so mic never shifts
