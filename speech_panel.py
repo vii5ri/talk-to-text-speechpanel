@@ -22,6 +22,15 @@ try:
 except ImportError:
     pystray = None
 
+try:
+    from faster_whisper import WhisperModel as _WhisperModel
+except ImportError:
+    _WhisperModel = None
+
+# ── Whisper ───────────────────────────────────────────────────────────────────
+WHISPER_MODEL_SIZE = 'large-v3'   # large-v3 ≈ 3GB VRAM, best Thai quality
+_WHISPER_LANG = {'th-TH': 'th', 'en-US': 'en'}
+
 # ── Layout ────────────────────────────────────────────────────────────────────
 PANEL_W    = 880
 PANEL_H    = 980
@@ -370,6 +379,9 @@ class SpeechPanel(ctk.CTk):
         keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle))
         self._init_tray()
         self.bind('<space>', self._space_key)
+        self._whisper = None
+        if _WhisperModel:
+            threading.Thread(target=self._load_whisper, daemon=True).start()
 
     # ── Window ────────────────────────────────────────────────────────────────
 
@@ -1197,7 +1209,21 @@ class SpeechPanel(ctk.CTk):
         else:
             self.after(0, lambda t=text: self._add_segment(t))
 
-    # ── Free mode (batch Google STT) ──────────────────────────────────────────
+    # ── Whisper loader ────────────────────────────────────────────────────────
+
+    def _load_whisper(self):
+        try:
+            self.after(0, lambda: self._set_status('⏳ กำลังโหลด Whisper model...'))
+            self._whisper = _WhisperModel(
+                WHISPER_MODEL_SIZE, device='cuda', compute_type='float16')
+            self.after(0, lambda: self._set_status(
+                'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+        except Exception as e:
+            self._whisper = None
+            self.after(0, lambda: self._set_status(
+                'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+
+    # ── Free mode (batch STT) ─────────────────────────────────────────────────
 
     def _start_free(self):
         def _cb(indata, frames, t, status):
@@ -1217,19 +1243,32 @@ class SpeechPanel(ctk.CTk):
 
     def _transcribe_free(self):
         try:
-            if not self._audio_chunks: self.after(0, lambda: self._set_status('ไม่มีเสียง')); return
+            if not self._audio_chunks:
+                self.after(0, lambda: self._set_status('ไม่มีเสียง')); return
             raw = np.concatenate(self._audio_chunks, axis=0)
-            buf = io.BytesIO()
-            with wave.open(buf,'wb') as wf:
-                wf.setnchannels(1); wf.setsampwidth(2)
-                wf.setframerate(SAMPLERATE); wf.writeframes(raw.tobytes())
-            buf.seek(0)
-            with sr.AudioFile(buf) as src: audio = self._recognizer.record(src)
-            text = self._recognizer.recognize_google(audio, language=self._lang)
-            self.after(0, lambda t=text: self._finish_text(t))
+            if self._whisper:
+                audio_f32 = raw.flatten().astype(np.float32) / 32768.0
+                lang = _WHISPER_LANG.get(self._lang, 'th')
+                segments, _ = self._whisper.transcribe(
+                    audio_f32, language=lang, beam_size=5,
+                    vad_filter=True,
+                    vad_parameters=dict(min_silence_duration_ms=500))
+                text = ' '.join(seg.text.strip() for seg in segments).strip()
+            else:
+                buf = io.BytesIO()
+                with wave.open(buf, 'wb') as wf:
+                    wf.setnchannels(1); wf.setsampwidth(2)
+                    wf.setframerate(SAMPLERATE); wf.writeframes(raw.tobytes())
+                buf.seek(0)
+                with sr.AudioFile(buf) as src: audio = self._recognizer.record(src)
+                text = self._recognizer.recognize_google(audio, language=self._lang)
+            if text:
+                self.after(0, lambda t=text: self._finish_text(t))
+            else:
+                self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
         except sr.UnknownValueError: self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
-        except sr.RequestError: self.after(0, lambda: self._rec_err('ไม่มีอินเทอร์เน็ต'))
-        except Exception as e: self.after(0, lambda: self._rec_err(str(e)[:50]))
+        except sr.RequestError:      self.after(0, lambda: self._rec_err('ไม่มีอินเทอร์เน็ต'))
+        except Exception as e:       self.after(0, lambda: self._rec_err(str(e)[:50]))
 
     # ── Common ────────────────────────────────────────────────────────────────
 
