@@ -507,14 +507,17 @@ class SpeechPanel(ctk.CTk):
         # STT engine selector
         er = ctk.CTkFrame(left, fg_color=C['bg'])
         er.pack(fill='x', padx=4, pady=(0,2))
+        ctk.CTkLabel(er, text='STT Engine:', font=_f(11),
+                     text_color=C['sub']).pack(side='left', padx=(4,6))
         _init_engine = '🌐 Google' if self._cfg.get('stt_engine', 'google') == 'google' else '🤖 Whisper GPU'
-        self._engine_btn = ctk.CTkSegmentedButton(
+        self._engine_menu = ctk.CTkOptionMenu(
             er, values=['🌐 Google', '🤖 Whisper GPU'],
             command=self._set_engine,
             font=_f(11), height=26,
-            selected_color=C['accent'], selected_hover_color=C['purple'])
-        self._engine_btn.set(_init_engine)
-        self._engine_btn.pack(fill='x', padx=4)
+            fg_color=C['card'], button_color=C['accent'],
+            button_hover_color=C['purple'])
+        self._engine_menu.set(_init_engine)
+        self._engine_menu.pack(side='left', padx=(0,4))
 
         # Mic zone: status LEFT | mic CENTER (fixed) | timer RIGHT
         # Both side columns have equal uniform minsize so mic never shifts
