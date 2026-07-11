@@ -1268,7 +1268,7 @@ class SpeechPanel(ctk.CTk):
                 self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
         except sr.UnknownValueError: self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
         except sr.RequestError:      self.after(0, lambda: self._rec_err('ไม่มีอินเทอร์เน็ต'))
-        except Exception as e:       self.after(0, lambda: self._rec_err(str(e)[:50]))
+        except Exception as e:       self.after(0, lambda err=e: self._rec_err(str(err)[:50]))
 
     # ── Common ────────────────────────────────────────────────────────────────
 
