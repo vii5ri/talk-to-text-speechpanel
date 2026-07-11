@@ -5,7 +5,7 @@ Speech Panel v2 — Thai / English Speech-to-Text
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
 """
 import threading, io, wave, time, json, re
-import os, sys, webbrowser, subprocess
+import os, sys, webbrowser
 import datetime, traceback, ctypes
 import tkinter as tk
 from tkinter import messagebox
@@ -356,9 +356,6 @@ class SpeechPanel(ctk.CTk):
         self._active_card  = None
         self._f9_target    = None   # hwnd to paste into (F9 mode), or None
         self._ph_pending   = None   # (card, token) armed for replacement
-        self._live_proc    = None   # stt_worker subprocess
-        self._live_buf     = []     # accumulated final segments
-        self._live_ready   = False  # webview finished loading
         # Vocabulary tabs (migrate old flat list → tab "1")
         if 'vocab' in self._cfg and 'vocab_tabs' not in self._cfg:
             self._cfg['vocab_tabs'] = {'1': self._cfg.pop('vocab'), '2': [], '3': []}
@@ -396,7 +393,6 @@ class SpeechPanel(ctk.CTk):
         self._init_tray()
         self.bind('<space>', self._space_key)
         self._whisper = None
-        self._whisper_lock = threading.Lock()
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
 
@@ -1081,14 +1077,6 @@ class SpeechPanel(ctk.CTk):
         self._destroy_edge_tab()
         try: keyboard.unhook_all()
         except Exception: pass
-        if getattr(self, '_live_proc', None) and self._live_proc.poll() is None:
-            try:
-                self._live_proc.stdin.write(json.dumps({'action': 'quit'}) + '\n')
-                self._live_proc.stdin.flush()
-                self._live_proc.wait(timeout=2)
-            except Exception:
-                try: self._live_proc.terminate()
-                except Exception: pass
         self.destroy()
 
     # ── System tray ───────────────────────────────────────────────────────────
