@@ -891,6 +891,8 @@ class SpeechPanel(ctk.CTk):
             self._destroy_edge_tab()
             self.deiconify(); self.lift()
             self._visible = True
+            if self._auto_collapse and not self._edge_tab_locked:
+                self._monitor_leave()
 
     def _update_snap_btns(self):
         for d, btn in self._snap_btns.items():
@@ -952,7 +954,7 @@ class SpeechPanel(ctk.CTk):
             try: self.after_cancel(self._leave_job)
             except Exception: pass
             self._leave_job = None
-        if not self._auto_collapse or not self._visible or self._edge_tab_locked:
+        if not self._auto_collapse or not self._visible or self._edge_tab_locked or self._recording:
             return
         try:
             mx, my = self.winfo_pointerxy()
@@ -1209,6 +1211,8 @@ class SpeechPanel(ctk.CTk):
     def _common_stop_ui(self):
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
         self._timer_lbl.configure(text=''); self._replace_hint.configure(text='')
+        if self._auto_collapse and self._visible and not self._edge_tab_locked:
+            self._monitor_leave()
 
     def _apply_dictionary(self, text: str) -> str:
         pairs = [(e['wrong'], e['right'])
