@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 Speech Panel v2 — Thai / English Speech-to-Text
-กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  Space เพื่อเริ่ม/หยุด
+กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  F10 เพื่อเริ่ม/หยุด  |  F9 พูดใส่แอปอื่น
 """
 import threading, io, wave, time, json, re
 import os, sys, webbrowser
@@ -56,7 +56,8 @@ _WHISPER_LANG = {'th-TH': 'th', 'en-US': 'en'}
 PANEL_W    = 880
 PANEL_H    = 980
 LEFT_W     = 520
-HOTKEY     = 'ctrl+shift+space'
+HOTKEY      = 'ctrl+shift+space'
+RECORD_KEY  = 'f10'
 DICTATE_KEY = 'f9'
 SAMPLERATE = 16000
 BLOCKSIZE  = 1024
@@ -397,9 +398,9 @@ class SpeechPanel(ctk.CTk):
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
+        keyboard.add_hotkey(RECORD_KEY, lambda: self.after(0, self._toggle_rec))
         keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle))
         self._init_tray()
-        self.bind('<space>', self._space_key)
         self._whisper = None
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
@@ -530,7 +531,7 @@ class SpeechPanel(ctk.CTk):
         # Left: status text + replace hint
         _lf = ctk.CTkFrame(mz, fg_color='transparent')
         _lf.grid(row=0, column=0, sticky='nsew', padx=(0,4), pady=4)
-        self._status_lbl = ctk.CTkLabel(_lf, text='กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น',
+        self._status_lbl = ctk.CTkLabel(_lf, text='กด F10 หรือปุ่มไมค์เพื่อพูด • F9 = พูดใส่แอปอื่น',
                                          font=_f(11), text_color=C['sub'],
                                          wraplength=_side_w - 8, justify='left')
         self._status_lbl.pack(anchor='w', pady=(6,2))
@@ -582,7 +583,7 @@ class SpeechPanel(ctk.CTk):
         self._seg_frame.pack(fill='both', expand=True, pady=(2,0))
         self._empty_lbl = ctk.CTkLabel(
             self._seg_frame,
-            text='ยังไม่มีข้อความ\nกด Space เพื่อเริ่มพูด',
+            text='ยังไม่มีข้อความ\nกด F10 เพื่อเริ่มพูด',
             font=_f(12), text_color=C['sub'], justify='center')
         self._empty_lbl.pack(pady=30)
 
@@ -1112,20 +1113,14 @@ class SpeechPanel(ctk.CTk):
         messagebox.showinfo(
             'Speech Panel — วิธีใช้',
             'Ctrl+Shift+Space   แสดง/ซ่อนหน้าต่าง\n'
-            'Space หรือปุ่มไมค์   เริ่ม/หยุดอัดเสียง (ลงการ์ด)\n\n'
-            'F9   กดจากแอปไหนก็ได้ = เริ่มอัดเสียง\n'
+            'F10 หรือปุ่มไมค์   เริ่ม/หยุดอัดเสียง (ลงการ์ด)\n'
+            'F9    พูดใส่แอปอื่นโดยตรง\n'
             '       กดอีกครั้ง = ข้อความพิมพ์ลงแอปนั้นทันที\n\n'
             'คลิกการ์ด = copy ข้อความทั้งใบ\n'
             'คลิก ABC / ABC2 ในการ์ด = เลือก token\n'
             '       แล้วคลิกคำใน vocab เพื่อแทนที่ทุกจุด\n'
             'ลากคลุมข้อความ + คลิกคำใน vocab = แทนที่จุดนั้น\n'
             '📌 ปุ่มในแผงคำศัพท์ = เปลี่ยนคำ placeholder')
-
-    # ── Space key ─────────────────────────────────────────────────────────────
-
-    def _space_key(self, event):
-        if isinstance(self.focus_get(), tk.Text): return
-        self._toggle_rec(); return 'break'
 
     # ── F9 direct dictation ───────────────────────────────────────────────────
 
@@ -1204,7 +1199,7 @@ class SpeechPanel(ctk.CTk):
             self._set_status('🔴 กำลังฟัง — แทนที่ที่เลือก...')
             self._replace_hint.configure(text=f'📌 แทนที่ใน #{self._replace_card.seg_id}')
         else:
-            self._set_status('🔴 กำลังฟัง... กด Space หรือ ⏹ เพื่อหยุด')
+            self._set_status('🔴 กำลังฟัง... กด F10 หรือ ⏹ เพื่อหยุด')
         self._tick()
         self._start_free()
 
@@ -1247,11 +1242,11 @@ class SpeechPanel(ctk.CTk):
             self._whisper = _WhisperModel(
                 WHISPER_MODEL_SIZE, device='cuda', compute_type='float16')
             self.after(0, lambda: self._set_status(
-                'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+                'กด F10 หรือปุ่มไมค์เพื่อพูด • F9 = พูดใส่แอปอื่น'))
         except Exception as err:
             self._whisper = None
             self.after(0, lambda: self._set_status(
-                'กดปุ่มหรือ Space เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+                'กด F10 หรือปุ่มไมค์เพื่อพูด • F9 = พูดใส่แอปอื่น'))
 
     def _set_engine(self, val: str):
         engine = 'whisper' if 'Whisper' in val else 'google'
@@ -1379,7 +1374,7 @@ class SpeechPanel(ctk.CTk):
         if card is self._active_card: self._active_card = None
         card.pack_forget(); card.destroy(); self._cards.remove(card)
         self._update_combined()
-        if not self._cards: self._empty_lbl.pack(pady=30); self._set_status('กด Space เพื่อเริ่มพูด')
+        if not self._cards: self._empty_lbl.pack(pady=30); self._set_status('กด F10 เพื่อเริ่มพูด')
 
     def _move_up(self, card):
         i = self._cards.index(card)
