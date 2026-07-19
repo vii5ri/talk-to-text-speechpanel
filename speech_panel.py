@@ -61,7 +61,16 @@ RECORD_KEY  = 'f10'
 DICTATE_KEY = 'f9'
 SAMPLERATE = 16000
 BLOCKSIZE  = 1024
-SEP        = ' '
+
+POLISH_PROMPT = (
+    'ปรับข้อความที่ได้จาก Speech-to-Text ดังนี้:\n'
+    '1. ลบคำสร้อยที่ไม่มีความหมาย เช่น "เอ่อ" "อ่า" "อืม" "แบบว่า" "คือว่า"\n'
+    '2. ถ้าพูดผิดแล้วแก้กลางประโยค ให้เก็บเฉพาะเวอร์ชันสุดท้ายที่ถูกต้อง\n'
+    '3. จัดประโยคให้อ่านง่ายขึ้น แต่ห้ามเปลี่ยนความหมายหรือเพิ่มเนื้อหาใหม่\n'
+    '4. ตอบเฉพาะข้อความที่ปรับแล้ว ห้ามอธิบายหรือใส่คำนำ\n\n'
+    'ข้อความ:\n{text}'
+)
+
 IMAGE_TOOL = 'https://image-to-type-helper.lovable.app/'
 AI_CHATS   = {
     'ChatGPT':        'https://chat.openai.com/',
@@ -121,6 +130,37 @@ def _setup_crash_handler():
         except Exception:
             pass
     sys.excepthook = _excepthook
+
+def _is_thai(c: str) -> bool:
+    return '฀' <= c <= '๿'
+
+def _smart_join(texts: list) -> str:
+    """Join segments: no separator between Thai↔Thai boundaries, space otherwise."""
+    result = ''
+    for t in texts:
+        if not t:
+            continue
+        if result:
+            sep = '' if (_is_thai(result[-1]) and _is_thai(t[0])) else ' '
+            result += sep + t
+        else:
+            result = t
+    return result
+
+def _fix_punct_spacing(text: str) -> str:
+    """Add space after punctuation/special symbols when followed by non-space."""
+    # After ? ! … ← sentence-ending marks
+    text = re.sub(r'([?!…])([^\s])', r'\1 \2', text)
+    # After ๆ ฯ ← Thai special marks
+    text = re.sub(r'([ๆฯ])([^\s])', r'\1 \2', text)
+    # After , ; ← list/clause separators
+    text = re.sub(r'([,;])([^\s])', r'\1 \2', text)
+    # After . ← only when NOT a decimal point (skip if digit.digit)
+    def _dot(m):
+        a, b = m.group(1), m.group(2)
+        return m.group(0) if (a.isdigit() and b.isdigit()) else f'{a}. {b}'
+    text = re.sub(r'(.)\.([^\s])', _dot, text)
+    return text
 
 def _load_cfg() -> dict:
     try:
@@ -233,17 +273,19 @@ class AddVocabDialog(ctk.CTkToplevel):
 # ── Segment card ──────────────────────────────────────────────────────────────
 class SegmentCard(ctk.CTkFrame):
     def __init__(self, parent, text, seg_id, *,
-                 on_delete, show_toast, on_change, on_move_up, on_move_down, on_copy):
+                 on_delete, show_toast, on_change, on_move_up, on_move_down, on_copy,
+                 on_polish=None):
         super().__init__(parent, fg_color=C['card'], corner_radius=8,
                          border_width=2, border_color=C['border'])
-        self.seg_id     = seg_id
-        self._del_cb    = on_delete
-        self._toast_cb  = show_toast
-        self._change_cb = on_change
-        self._up_cb     = on_move_up
-        self._down_cb   = on_move_down
-        self._copy_cb   = on_copy
-        self.selected   = tk.BooleanVar(value=False)
+        self.seg_id      = seg_id
+        self._del_cb     = on_delete
+        self._toast_cb   = show_toast
+        self._change_cb  = on_change
+        self._up_cb      = on_move_up
+        self._down_cb    = on_move_down
+        self._copy_cb    = on_copy
+        self._polish_cb  = on_polish
+        self.selected    = tk.BooleanVar(value=False)
         self._build(text)
 
     def _build(self, text):
@@ -270,6 +312,11 @@ class SegmentCard(ctk.CTkFrame):
         ctk.CTkButton(top, text='🗑', width=48, height=34, fg_color='transparent',
                       hover_color=C['del_hover'], font=ctk.CTkFont(size=22),
                       command=lambda: self._del_cb(self)).pack(side='right')
+        self._polish_btn = ctk.CTkButton(
+            top, text='✨', width=38, height=34, fg_color='transparent',
+            hover_color=C['purple'], font=ctk.CTkFont(size=18),
+            command=self._trigger_polish)
+        self._polish_btn.pack(side='right', padx=(0, 2))
 
         self._tb = ctk.CTkTextbox(self, height=96, font=_f(17),
                                    fg_color=C['card2'], text_color=C['text'],
@@ -286,6 +333,9 @@ class SegmentCard(ctk.CTkFrame):
 
     def _trigger_copy(self, event=None):
         if self._copy_cb: self._copy_cb(self, event)
+
+    def _trigger_polish(self):
+        if self._polish_cb: self._polish_cb(self)
 
     def _fire(self):
         if self._change_cb: self._change_cb()
@@ -389,12 +439,14 @@ class SpeechPanel(ctk.CTk):
         self._edge_tab_hover  = None
         self._edge_tab_locked = self._cfg.get('locked', True)   # default: locked (🔒 red)
         self._auto_collapse   = self._cfg.get('auto_collapse', False)
+        self._auto_expand     = self._cfg.get('auto_expand', True)   # edge-tab hover → expand
         self._leave_job       = None
+        self._gemini_key      = self._cfg.get('gemini_api_key', '')
 
         self._init_window()
         self._build_ui()
         # Sync button colours and start polling if auto-collapse was saved in config
-        self._update_auto_collapse_btn()
+        self._update_auto_expand_btn()
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
@@ -429,7 +481,7 @@ class SpeechPanel(ctk.CTk):
 
         ctk.CTkLabel(hdr, text='🎤  Speech Panel',
                      font=_f(14,'bold'), text_color=C['text']).pack(side='left', padx=12)
-        # Lock button — leftmost, before direction buttons
+        # Lock button — controls auto-collapse; 🔒 red=locked (no auto-collapse), 🔓 blue=unlocked
         self._lock_btn = ctk.CTkButton(
             hdr,
             text='🔒' if self._edge_tab_locked else '🔓',
@@ -438,7 +490,15 @@ class SpeechPanel(ctk.CTk):
             hover_color=C['purple'],
             font=ctk.CTkFont(size=16),
             command=self._toggle_lock)
-        self._lock_btn.pack(side='left', padx=(0, 6))
+        self._lock_btn.pack(side='left', padx=(0, 2))
+        # Auto-expand button — controls edge-tab hover expansion; ⇄ blue=auto-expand, red=manual only
+        self._auto_col_btn = ctk.CTkButton(
+            hdr, text='⇄', width=42, height=40,
+            fg_color=C['accent'] if self._auto_expand else C['red'],
+            hover_color=C['purple'],
+            font=ctk.CTkFont(size=16), text_color='#fff',
+            command=self._toggle_auto_expand)
+        self._auto_col_btn.pack(side='left', padx=(0, 6))
         # 4 snap-direction buttons
         self._snap_btns = {}
         _sf = ctk.CTkFrame(hdr, fg_color='transparent')
@@ -454,17 +514,10 @@ class SpeechPanel(ctk.CTk):
                 command=lambda d=_d: self._snap_to_edge(d))
             _b.pack(side='left', padx=1)
             self._snap_btns[_d] = _b
-        # Auto-collapse toggle button (🖱 = mouse-out collapses)
-        self._auto_col_btn = ctk.CTkButton(
-            hdr, text='🖱', width=42, height=40,
-            fg_color=C['card'], hover_color=C['purple'],
-            font=ctk.CTkFont(size=16), text_color=C['sub'],
-            command=self._toggle_auto_collapse)
-        self._auto_col_btn.pack(side='left', padx=(3, 0))
-        # Collapse button — large, prominent icon; RED = auto-collapse OFF, BLUE = ON
+        # Collapse button — color mirrors lock btn; RED=locked, BLUE=unlocked
         self._collapse_btn = ctk.CTkButton(
             hdr, text='⬡', width=54, height=44,
-            fg_color=C['accent'] if self._auto_collapse else C['red'],
+            fg_color=C['red'] if self._edge_tab_locked else C['accent'],
             hover_color=C['border'],
             font=ctk.CTkFont(size=24), text_color='#fff',
             command=self._collapse_panel)
@@ -477,6 +530,10 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(hdr, text='─', width=50, height=44, fg_color='transparent',
                       hover_color=C['card'], font=ctk.CTkFont(size=20), text_color=C['sub'],
                       command=self._toggle_visibility).pack(side='right', padx=(0,2))
+        # Gemini API key settings
+        ctk.CTkButton(hdr, text='🔑', width=36, height=36, fg_color='transparent',
+                      hover_color=C['card'], font=ctk.CTkFont(size=15), text_color=C['sub'],
+                      command=self._set_gemini_key).pack(side='right', padx=(0, 2))
         # AI Chat launcher (header)
         ctk.CTkButton(hdr, text='🤖', width=38, height=34,
                       fg_color=C['accent'], hover_color=C['purple'],
@@ -566,7 +623,7 @@ class SpeechPanel(ctk.CTk):
         ctk.CTkButton(act, text='📋 ทั้งหมด', height=26, font=_f(11),
                       fg_color=C['accent'], hover_color=C['purple'],
                       command=self._copy_all).pack(side='left', fill='x', expand=True, padx=(0,2))
-        ctk.CTkButton(act, text='📋 ที่เลือก', height=26, font=_f(11),
+        ctk.CTkButton(act, text='📋 Copy ☑', height=26, font=_f(11),
                       fg_color=C['card'], hover_color=C['accent'], text_color=C['text'],
                       command=self._copy_selected).pack(side='left', fill='x', expand=True, padx=(0,2))
         ctk.CTkButton(act, text='🗑', height=48, width=80, font=ctk.CTkFont(size=30),
@@ -923,31 +980,28 @@ class SpeechPanel(ctk.CTk):
         self._cfg['auto_collapse'] = self._auto_collapse
         _save_cfg(self._cfg)
         self._update_lock_btn()
-        self._update_auto_collapse_btn()
         if self._auto_collapse and self._visible:
             self._monitor_leave()
 
     def _update_lock_btn(self):
         if self._edge_tab_locked:
             self._lock_btn.configure(fg_color=C['red'],    text='🔒')
+            self._collapse_btn.configure(fg_color=C['red'])
         else:
             self._lock_btn.configure(fg_color=C['accent'], text='🔓')
-
-    def _toggle_auto_collapse(self):
-        self._auto_collapse = not self._auto_collapse
-        self._cfg['auto_collapse'] = self._auto_collapse
-        _save_cfg(self._cfg)
-        self._update_auto_collapse_btn()
-        if self._auto_collapse and self._visible:
-            self._monitor_leave()
-
-    def _update_auto_collapse_btn(self):
-        if self._auto_collapse:
-            self._auto_col_btn.configure(fg_color=C['accent'], text_color='#fff')
             self._collapse_btn.configure(fg_color=C['accent'])
+
+    def _toggle_auto_expand(self):
+        self._auto_expand = not self._auto_expand
+        self._cfg['auto_expand'] = self._auto_expand
+        _save_cfg(self._cfg)
+        self._update_auto_expand_btn()
+
+    def _update_auto_expand_btn(self):
+        if self._auto_expand:
+            self._auto_col_btn.configure(fg_color=C['accent'], text_color='#fff')
         else:
-            self._auto_col_btn.configure(fg_color=C['card'], text_color=C['sub'])
-            self._collapse_btn.configure(fg_color=C['red'])
+            self._auto_col_btn.configure(fg_color=C['red'], text_color='#fff')
 
     def _monitor_leave(self):
         if self._leave_job:
@@ -983,6 +1037,7 @@ class SpeechPanel(ctk.CTk):
         self.deiconify(); self.lift()
         self._visible = True
         self._update_lock_btn()
+        self._update_auto_expand_btn()
         if self._auto_collapse:
             self._monitor_leave()
 
@@ -1022,8 +1077,8 @@ class SpeechPanel(ctk.CTk):
         tab.attributes('-topmost', True)
         tab.configure(bg=C['accent'])
         tab.geometry(f'{tw}x{th}+{tx}+{ty}')
-        lock_bg   = C['red']    if self._edge_tab_locked else C['accent']
-        lock_icon = '🔒' if self._edge_tab_locked else '🔓'
+        lock_bg   = C['accent'] if self._auto_expand else C['red']
+        lock_icon = '🔓' if self._auto_expand else '🔒'
         expand_lbl = tk.Label(tab, text=arrow, bg=C['accent'], fg='white',
                               font=('Leelawadee UI', 13, 'bold'), cursor='hand2')
         lock_lbl   = tk.Label(tab, text=lock_icon, bg=lock_bg, fg='white',
@@ -1036,22 +1091,24 @@ class SpeechPanel(ctk.CTk):
             lock_lbl.pack(fill='y', side='right', ipadx=7)
         hover_job = [None]
         def _on_enter(e=None):
-            if self._edge_tab_locked:
+            if not self._auto_expand:
                 return
             if hover_job[0]:
                 try: tab.after_cancel(hover_job[0])
                 except Exception: pass
             hover_job[0] = tab.after(350, self._expand_panel)
         def _toggle_lock(e=None):
-            self._edge_tab_locked = not self._edge_tab_locked
-            if self._edge_tab_locked:
+            self._auto_expand = not self._auto_expand
+            self._cfg['auto_expand'] = self._auto_expand
+            _save_cfg(self._cfg)
+            if self._auto_expand:
+                lock_lbl.configure(bg=C['accent'], text='🔓')
+            else:
                 lock_lbl.configure(bg=C['red'], text='🔒')
                 if hover_job[0]:
                     try: tab.after_cancel(hover_job[0])
                     except Exception: pass
                     hover_job[0] = None
-            else:
-                lock_lbl.configure(bg=C['accent'], text='🔓')
         expand_lbl.bind('<Button-1>', lambda e: self._expand_panel())
         expand_lbl.bind('<Enter>', _on_enter)
         lock_lbl.bind('<Button-1>', _toggle_lock)
@@ -1225,6 +1282,7 @@ class SpeechPanel(ctk.CTk):
             self._f9_target = None
             self._set_status('ไม่ได้ยิน'); return
         text = self._apply_dictionary(text)
+        text = _fix_punct_spacing(text)
         text = _canon_tokens(text, self._cfg.get('placeholder', 'ABC'))
         if self._f9_target:
             self._paste_to_target(text)
@@ -1368,7 +1426,8 @@ class SpeechPanel(ctk.CTk):
         card = SegmentCard(self._seg_frame, text, self._seg_id,
                            on_delete=self._delete_segment, show_toast=self.show_toast,
                            on_change=self._schedule_update, on_move_up=self._move_up,
-                           on_move_down=self._move_down, on_copy=self._card_copy_clicked)
+                           on_move_down=self._move_down, on_copy=self._card_copy_clicked,
+                           on_polish=self._polish_card)
         self._cards.insert(0, card); self._refresh_order()
         if text: pyperclip.copy(text); self._set_active_card(card)
         self._update_combined()
@@ -1404,7 +1463,7 @@ class SpeechPanel(ctk.CTk):
 
     def _update_combined(self):
         texts = [c.get_text() for c in reversed(self._cards) if c.get_text()]
-        self._set_tb(self._combined_tb, SEP.join(texts))
+        self._set_tb(self._combined_tb, _smart_join(texts))
 
     def _set_tb(self, tb, text):
         tb.delete('1.0','end')
@@ -1443,21 +1502,101 @@ class SpeechPanel(ctk.CTk):
     # ── Bulk ──────────────────────────────────────────────────────────────────
 
     def _copy_all(self):
-        texts = [c.get_text() for c in self._cards if c.get_text()]
-        if texts: pyperclip.copy('\n'.join(texts)); self.show_toast(f'📋 Copy {len(texts)} กล่อง')
+        texts = [c.get_text() for c in reversed(self._cards) if c.get_text()]
+        if texts: pyperclip.copy(_smart_join(texts)); self.show_toast(f'📋 Copy {len(texts)} กล่อง')
         else: self.show_toast('ยังไม่มีข้อความ','info')
 
     def _copy_selected(self):
-        texts = [c.get_text() for c in self._cards if c.is_selected() and c.get_text()]
-        if texts: pyperclip.copy('\n'.join(texts)); self.show_toast(f'📋 Copy {len(texts)} กล่อง')
+        texts = [c.get_text() for c in reversed(self._cards) if c.is_selected() and c.get_text()]
+        if texts:
+            pyperclip.copy(_smart_join(texts))
+            self.show_toast(f'📋 Copy {len(texts)} กล่อง')
+            for c in self._cards:
+                c.selected.set(False)
         else: self.show_toast('ยังไม่ได้เลือก','info')
+
+    # ── AI Polish ─────────────────────────────────────────────────────────────
+
+    def _set_gemini_key(self):
+        current = self._gemini_key
+        hint = f'API Key ปัจจุบัน: {"*" * 8 + current[-4:] if len(current) > 4 else "(ยังไม่ตั้งค่า)"}'
+        dlg = ctk.CTkInputDialog(
+            text=f'{hint}\n\nวาง Groq API Key ใหม่:\n(รับฟรีที่ console.groq.com → API Keys)',
+            title='ตั้งค่า Groq API Key')
+        key = dlg.get_input()
+        if key is None:
+            return
+        key = key.strip()
+        self._gemini_key = key
+        self._cfg['gemini_api_key'] = key
+        _save_cfg(self._cfg)
+        self.show_toast('บันทึก API Key แล้ว' if key else 'ล้าง API Key แล้ว')
+
+    def _polish_card(self, card):
+        key = self._gemini_key.strip()
+        if not key:
+            self.show_toast('กรุณาตั้งค่า Groq API Key ก่อน (กด 🔑)', 'error')
+            self._set_gemini_key()
+            return
+        text = card.get_text()
+        if not text:
+            return
+        card._polish_btn.configure(text='⏳', state='disabled')
+        self._set_status('⏳ กำลัง Polish...')
+
+        def _worker():
+            try:
+                import requests as _req
+                url = 'https://api.groq.com/openai/v1/chat/completions'
+                headers = {'Authorization': f'Bearer {key}', 'Content-Type': 'application/json'}
+                body = {
+                    'model': 'llama-3.1-8b-instant',
+                    'messages': [{'role': 'user', 'content': POLISH_PROMPT.format(text=text)}],
+                    'temperature': 0.3,
+                    'max_tokens': 1024,
+                }
+                r = _req.post(url, json=body, headers=headers, timeout=30)
+                if r.status_code == 429:
+                    self.after(0, lambda: self._polish_error(
+                        card, 'เกิน quota — รอ 1 นาทีแล้วลองใหม่ (free tier 30 req/นาที)'))
+                    return
+                if r.status_code in (401, 403):
+                    self.after(0, lambda: self._polish_error(
+                        card, 'API Key ไม่ถูกต้อง — กด 🔑 แล้ววาง Groq Key ใหม่'))
+                    return
+                r.raise_for_status()
+                data = r.json()
+                polished = data['choices'][0]['message']['content'].strip()
+                if polished:
+                    self.after(0, lambda: self._apply_polish(card, polished))
+                else:
+                    self.after(0, lambda: self._polish_error(card, 'ไม่ได้รับผลลัพธ์'))
+            except Exception as e:
+                self.after(0, lambda err=str(e): self._polish_error(card, err))
+
+        threading.Thread(target=_worker, daemon=True).start()
+
+    def _apply_polish(self, card, polished):
+        card._tb.delete('1.0', 'end')
+        card._tb.insert('1.0', polished)
+        card._fire()
+        card._polish_btn.configure(text='✨', state='normal')
+        pyperclip.copy(polished)
+        card.set_copied(True)
+        self.after(2000, lambda: card.set_copied(False))
+        self._set_status('✨ Polish เสร็จ — คัดลอกแล้ว')
+
+    def _polish_error(self, card, msg):
+        card._polish_btn.configure(text='✨', state='normal')
+        self.show_toast(f'Gemini: {msg}', 'error')
 
     def _clear_all(self):
         if not self._cards: return
-        if messagebox.askyesno('ยืนยัน', f'ล้างทั้งหมด {len(self._cards)} กล่อง?', parent=self):
-            for c in self._cards[:]: c.destroy()
-            self._cards.clear(); self._update_combined()
-            self._empty_lbl.pack(pady=30); self._set_status('ล้างแล้ว')
+        count = len(self._cards)
+        for c in self._cards[:]: c.destroy()
+        self._cards.clear(); self._update_combined()
+        self._empty_lbl.pack(pady=30); self._set_status('ล้างแล้ว')
+        self.show_toast(f'🗑 ล้างแล้ว {count} กล่อง', 'error')
 
     # ── AI Chat launcher ──────────────────────────────────────────────────────
 

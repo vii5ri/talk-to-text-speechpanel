@@ -8,3 +8,4 @@ keyboard
 google-cloud-speech
 faster-whisper
 pywebview
+google-genai

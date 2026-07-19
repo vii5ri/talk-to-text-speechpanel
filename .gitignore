@@ -8,9 +8,13 @@ build/
 dist/
 *.spec
 
-# Config with credentials
-# speech_panel_config.json is safe (no API keys)
+# Config with credentials (contains API keys — do not commit)
+speech_panel_config.json
 project-*.json
+
+# Logs and temp files
+speech_panel_crash.log
+Compressed
 
 # OS
 Thumbs.db
