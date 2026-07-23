@@ -1146,6 +1146,7 @@ class SpeechPanel(ctk.CTk):
         try: keyboard.unhook_all()
         except Exception: pass
         self.destroy()
+        sys.exit(0)
 
     # ── System tray ───────────────────────────────────────────────────────────
 
