@@ -1330,10 +1330,14 @@ class SpeechPanel(ctk.CTk):
         except Exception as e: self._rec_err(f'ไมค์: {e}')
 
     def _stop_free(self):
-        self._common_stop_ui()
+        self._mic_btn.configure(fg_color=C['accent'], text='🎤')
+        self._replace_hint.configure(text='')
         self._set_status('⏳ กำลังแปลงเสียง...')
         def _do_stop():
-            self._recording = False
+            self._recording = False          # stops _tick()
+            self._timer_lbl.configure(text='')
+            if self._auto_collapse and self._visible and not self._edge_tab_locked:
+                self._monitor_leave()
             if self._stream: self._stream.stop(); self._stream.close(); self._stream = None
             threading.Thread(target=self._transcribe_free, daemon=True).start()
         self.after(400, _do_stop)
