@@ -437,6 +437,10 @@ class SpeechPanel(ctk.CTk):
         self._snap_edge       = 'left'
         self._edge_tab        = None
         self._edge_tab_hover  = None
+        self._edge_indicator  = None
+        self._edge_tab_pulse  = None
+        self._edge_pulse_on   = False
+        self._recording_tab_only = False
         self._edge_tab_locked = self._cfg.get('locked', True)   # default: locked (🔒 red)
         self._auto_collapse   = self._cfg.get('auto_collapse', False)
         self._auto_expand     = self._cfg.get('auto_expand', True)   # edge-tab hover → expand
@@ -1042,6 +1046,11 @@ class SpeechPanel(ctk.CTk):
             self._monitor_leave()
 
     def _destroy_edge_tab(self):
+        if self._edge_tab_pulse and self._edge_tab:
+            try: self._edge_tab.after_cancel(self._edge_tab_pulse)
+            except Exception: pass
+        self._edge_tab_pulse = None
+        self._edge_indicator = None
         if self._edge_tab:
             try: self._edge_tab.destroy()
             except Exception: pass
@@ -1050,6 +1059,47 @@ class SpeechPanel(ctk.CTk):
             try: self._edge_tab_hover.destroy()
             except Exception: pass
             self._edge_tab_hover = None
+
+    def _refresh_edge_recording_indicator(self):
+        """Redraw a collapsed tab when recording starts or ends."""
+        if self._edge_tab:
+            self._show_edge_tab()
+
+    def _show_recording_indicator(self):
+        """Expose the compact status tab if the panel was fully hidden."""
+        if not self._visible and not self._edge_tab:
+            self._recording_tab_only = True
+            self._show_edge_tab()
+        else:
+            self._refresh_edge_recording_indicator()
+
+    def _hide_recording_indicator(self):
+        """Return to fully hidden after a recording started from that state."""
+        if self._recording_tab_only:
+            self._destroy_edge_tab()
+            self._recording_tab_only = False
+        else:
+            self._refresh_edge_recording_indicator()
+
+    def _animate_edge_recording_indicator(self):
+        """Pulse the red dot while the compact recording indicator is visible."""
+        if not self._edge_tab or not self._edge_indicator or not self._recording:
+            self._edge_tab_pulse = None
+            return
+        try:
+            canvas = self._edge_indicator
+            width, height = canvas.winfo_width(), canvas.winfo_height()
+            radius = 7 if self._edge_pulse_on else 5
+            cx, cy = width // 2, height // 2
+            canvas.delete('recording-dot')
+            canvas.create_oval(cx - radius, cy - radius, cx + radius, cy + radius,
+                               fill=C['red'], outline='#fee2e2', width=1,
+                               tags='recording-dot')
+            self._edge_pulse_on = not self._edge_pulse_on
+            self._edge_tab_pulse = self._edge_tab.after(
+                500, self._animate_edge_recording_indicator)
+        except tk.TclError:
+            self._edge_tab_pulse = None
 
     def _show_edge_tab(self):
         self._destroy_edge_tab()
@@ -1060,10 +1110,11 @@ class SpeechPanel(ctk.CTk):
         arrows = {'left': '▶', 'right': '◀', 'top': '▼', 'bottom': '▲'}
         arrow  = arrows.get(edge, '▶')
         vertical = edge in ('left', 'right')
+        show_recording = self._recording
         if vertical:
-            tw, th = 28, 96
+            tw, th = 28, (128 if show_recording else 96)
         else:
-            tw, th = 116, 28
+            tw, th = (144 if show_recording else 116), 28
         if edge == 'left':
             tx, ty = 0, max(0, min(py + (ph - th) // 2, sh - th))
         elif edge == 'right':
@@ -1077,11 +1128,27 @@ class SpeechPanel(ctk.CTk):
         tab.attributes('-topmost', True)
         tab.configure(bg=C['accent'])
         tab.geometry(f'{tw}x{th}+{tx}+{ty}')
+        blue_tab = tk.Frame(tab, bg=C['accent'], width=28 if vertical else 116,
+                            height=96 if vertical else 28)
+        indicator = None
+        if show_recording:
+            indicator = tk.Canvas(tab, bg=C['green'], highlightthickness=0,
+                                  width=28, height=32 if vertical else 28)
+            # Stack the recording indicator above the blue tab.  It matches
+            # the size of the red lock block, producing green → blue → red.
+            if vertical:
+                indicator.place(x=0, y=0, width=28, height=32)
+                blue_tab.place(x=0, y=32, width=28, height=96)
+            else:
+                blue_tab.place(x=0, y=0, width=116, height=28)
+                indicator.place(x=116, y=0, width=28, height=28)
+        else:
+            blue_tab.pack(fill='both', expand=True)
         lock_bg   = C['accent'] if self._auto_expand else C['red']
         lock_icon = '🔓' if self._auto_expand else '🔒'
-        expand_lbl = tk.Label(tab, text=arrow, bg=C['accent'], fg='white',
+        expand_lbl = tk.Label(blue_tab, text=arrow, bg=C['accent'], fg='white',
                               font=('Leelawadee UI', 13, 'bold'), cursor='hand2')
-        lock_lbl   = tk.Label(tab, text=lock_icon, bg=lock_bg, fg='white',
+        lock_lbl   = tk.Label(blue_tab, text=lock_icon, bg=lock_bg, fg='white',
                               font=('Leelawadee UI', 10), cursor='hand2')
         if vertical:
             expand_lbl.pack(fill='both', expand=True, side='top')
@@ -1114,6 +1181,10 @@ class SpeechPanel(ctk.CTk):
         lock_lbl.bind('<Button-1>', _toggle_lock)
         tab.bind('<Enter>', _on_enter)
         self._edge_tab = tab
+        self._edge_indicator = indicator
+        if indicator:
+            self._edge_pulse_on = False
+            tab.after_idle(self._animate_edge_recording_indicator)
 
         # Invisible extended hover zone — adds ~150px above & below the tab
         # so the user doesn't have to aim precisely at the small visible strip
@@ -1252,6 +1323,7 @@ class SpeechPanel(ctk.CTk):
             if sel: self._replace_card = card; self._replace_sel = sel; break
 
         self._recording = True; self._audio_chunks = []; self._rec_start = time.time()
+        self._show_recording_indicator()
         self._mic_btn.configure(fg_color=C['red'], text='⏹')
         self._set_partial('')
 
@@ -1335,6 +1407,7 @@ class SpeechPanel(ctk.CTk):
         self._set_status('⏳ กำลังแปลงเสียง...')
         def _do_stop():
             self._recording = False          # stops _tick()
+            self._hide_recording_indicator()
             self._timer_lbl.configure(text='')
             if self._auto_collapse and self._visible and not self._edge_tab_locked:
                 self._monitor_leave()
@@ -1383,6 +1456,7 @@ class SpeechPanel(ctk.CTk):
 
     def _rec_err(self, msg):
         self._recording = False; self._replace_card = None
+        self._hide_recording_indicator()
         self._f9_target = None
         self._common_stop_ui()
         self._set_status(f'⚠️ {msg}')
