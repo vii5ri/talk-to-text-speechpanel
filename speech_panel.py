@@ -453,9 +453,9 @@ class SpeechPanel(ctk.CTk):
         self._update_auto_expand_btn()
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
-        keyboard.add_hotkey(HOTKEY, lambda: self.after(0, self._toggle_visibility))
-        keyboard.add_hotkey(RECORD_KEY, lambda: self.after(0, self._toggle_rec))
-        keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle))
+        self._hotkey_handles = []
+        self._register_hotkeys()
+        self.after(30_000, self._recheck_hotkeys)
         self._init_tray()
         self._whisper = None
         if _WhisperModel:
@@ -1219,6 +1219,22 @@ class SpeechPanel(ctk.CTk):
         self.destroy()
         sys.exit(0)
 
+    # ── Hotkey registration ───────────────────────────────────────────────────
+
+    def _register_hotkeys(self):
+        for h in self._hotkey_handles:
+            try: keyboard.remove_hotkey(h)
+            except Exception: pass
+        self._hotkey_handles = [
+            keyboard.add_hotkey(HOTKEY,      lambda: self.after(0, self._toggle_visibility)),
+            keyboard.add_hotkey(RECORD_KEY,  lambda: self.after(0, self._toggle_rec)),
+            keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle)),
+        ]
+
+    def _recheck_hotkeys(self):
+        self._register_hotkeys()
+        self.after(30_000, self._recheck_hotkeys)
+
     # ── System tray ───────────────────────────────────────────────────────────
 
     def _init_tray(self):
@@ -1264,8 +1280,12 @@ class SpeechPanel(ctk.CTk):
             return
         u = ctypes.windll.user32
         hwnd = u.GetForegroundWindow()
-        own = u.GetAncestor(self.winfo_id(), 2)   # GA_ROOT
-        self._f9_target = hwnd if (hwnd and hwnd != own) else None
+        own_wins = {u.GetAncestor(self.winfo_id(), 2)}
+        for w in (self._edge_tab, self._edge_tab_hover):
+            if w:
+                try: own_wins.add(u.GetAncestor(w.winfo_id(), 2))
+                except Exception: pass
+        self._f9_target = hwnd if (hwnd and hwnd not in own_wins) else None
         self._start_rec()
         if self._f9_target:
             buf = ctypes.create_unicode_buffer(64)
