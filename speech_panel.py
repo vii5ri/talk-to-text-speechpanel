@@ -446,6 +446,8 @@ class SpeechPanel(ctk.CTk):
         self._auto_expand     = self._cfg.get('auto_expand', True)   # edge-tab hover → expand
         self._leave_job       = None
         self._gemini_key      = self._cfg.get('gemini_api_key', '')
+        self._audio_level     = 0.0
+        self._level_anim_job  = None
 
         self._init_window()
         self._build_ui()
@@ -455,8 +457,9 @@ class SpeechPanel(ctk.CTk):
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         self._hotkey_handles = []
         self._register_hotkeys()
-        self.after(30_000, self._recheck_hotkeys)
+        self.after(10_000, self._recheck_hotkeys)
         self._init_tray()
+        self.after(300_000, self._heartbeat)
         self._whisper = None
         if _WhisperModel:
             threading.Thread(target=self._load_whisper, daemon=True).start()
@@ -611,6 +614,9 @@ class SpeechPanel(ctk.CTk):
         _rf.grid(row=0, column=2, sticky='nsew', padx=(4,0), pady=4)
         self._timer_lbl = ctk.CTkLabel(_rf, text='', font=_f(16,'bold'), text_color=C['accent'])
         self._timer_lbl.pack(anchor='center', pady=(16,0))
+        self._level_canvas = tk.Canvas(
+            _rf, width=110, height=10, bg=C['bg'], highlightthickness=0)
+        # shown only while recording
 
         # Live preview — hidden by default, auto-shows during real-time STT
         self._partial_tb = ctk.CTkTextbox(
@@ -1225,15 +1231,27 @@ class SpeechPanel(ctk.CTk):
         for h in self._hotkey_handles:
             try: keyboard.remove_hotkey(h)
             except Exception: pass
-        self._hotkey_handles = [
-            keyboard.add_hotkey(HOTKEY,      lambda: self.after(0, self._toggle_visibility)),
-            keyboard.add_hotkey(RECORD_KEY,  lambda: self.after(0, self._toggle_rec)),
-            keyboard.add_hotkey(DICTATE_KEY, lambda: self.after(0, self._f9_toggle)),
-        ]
+        self._hotkey_handles = []
+        failed = []
+        for key, cb, label in [
+            (HOTKEY,      lambda: self.after(0, self._toggle_visibility), 'Ctrl+Shift+Space'),
+            (RECORD_KEY,  lambda: self.after(0, self._toggle_rec),        'F10'),
+            (DICTATE_KEY, lambda: self.after(0, self._f9_toggle),         'F9'),
+        ]:
+            try:
+                self._hotkey_handles.append(keyboard.add_hotkey(key, cb))
+            except Exception:
+                failed.append(label)
+        if failed and not getattr(self, '_hotkey_fail_notified', False):
+            self._hotkey_fail_notified = True
+            self.after(0, lambda keys=failed: self.show_toast(
+                f'⚠️ ลงทะเบียน hotkey ไม่สำเร็จ: {", ".join(keys)}', 'error'))
+        elif not failed:
+            self._hotkey_fail_notified = False
 
     def _recheck_hotkeys(self):
         self._register_hotkeys()
-        self.after(30_000, self._recheck_hotkeys)
+        self.after(10_000, self._recheck_hotkeys)
 
     # ── System tray ───────────────────────────────────────────────────────────
 
@@ -1354,6 +1372,7 @@ class SpeechPanel(ctk.CTk):
             self._set_status('🔴 กำลังฟัง... กด F10 หรือ ⏹ เพื่อหยุด')
         self._tick()
         self._start_free()
+        self.after(100, self._start_level_meter)
 
     def _stop_rec(self):
         self._stop_free()
@@ -1401,7 +1420,7 @@ class SpeechPanel(ctk.CTk):
         except Exception as err:
             self._whisper = None
             self.after(0, lambda: self._set_status(
-                'กด F10 หรือปุ่มไมค์เพื่อพูด • F9 = พูดใส่แอปอื่น'))
+                '⚠️ Whisper GPU โหลดไม่ได้ — ใช้ Google STT แทน'))
 
     def _set_engine(self, val: str):
         engine = 'whisper' if 'Whisper' in val else 'google'
@@ -1414,7 +1433,10 @@ class SpeechPanel(ctk.CTk):
 
     def _start_free(self):
         def _cb(indata, frames, t, status):
-            if self._recording: self._audio_chunks.append(indata.copy())
+            if self._recording:
+                self._audio_chunks.append(indata.copy())
+                rms = np.sqrt(np.mean(indata.astype(np.float32) ** 2)) / 32768.0
+                self._audio_level = min(1.0, rms * 10)
         try:
             self._stream = sd.InputStream(samplerate=SAMPLERATE, channels=1,
                                            dtype='int16', blocksize=BLOCKSIZE, callback=_cb)
@@ -1429,6 +1451,7 @@ class SpeechPanel(ctk.CTk):
             self._recording = False          # stops _tick()
             self._hide_recording_indicator()
             self._timer_lbl.configure(text='')
+            self._stop_level_meter()
             if self._auto_collapse and self._visible and not self._edge_tab_locked:
                 self._monitor_leave()
             if self._stream: self._stream.stop(); self._stream.close(); self._stream = None
@@ -1473,6 +1496,38 @@ class SpeechPanel(ctk.CTk):
         t = time.time() - self._rec_start
         self._timer_lbl.configure(text=f'⏱ {int(t//60)}:{int(t%60):02d}')
         self.after(500, self._tick)
+
+    def _start_level_meter(self):
+        self._level_canvas.pack(anchor='center', pady=(2, 0))
+        self._update_level_meter()
+
+    def _stop_level_meter(self):
+        if self._level_anim_job:
+            try: self.after_cancel(self._level_anim_job)
+            except Exception: pass
+            self._level_anim_job = None
+        self._level_canvas.pack_forget()
+        self._audio_level = 0.0
+
+    def _update_level_meter(self):
+        if not self._recording:
+            self._level_anim_job = None
+            return
+        level = self._audio_level
+        w = self._level_canvas.winfo_width() or 110
+        h = self._level_canvas.winfo_height() or 10
+        self._level_canvas.delete('all')
+        n_segs, gap = 8, 2
+        seg_w = w // n_segs
+        n_lit = int(level * n_segs)
+        for i in range(n_segs):
+            x1, x2 = i * seg_w + gap, (i + 1) * seg_w - gap
+            if i < n_lit:
+                color = C['green'] if i < 5 else ('#f59e0b' if i < 7 else C['red'])
+            else:
+                color = C['border']
+            self._level_canvas.create_rectangle(x1, 1, x2, h - 1, fill=color, outline='')
+        self._level_anim_job = self.after(80, self._update_level_meter)
 
     def _rec_err(self, msg):
         self._recording = False; self._replace_card = None
@@ -1706,6 +1761,18 @@ class SpeechPanel(ctk.CTk):
         if url: webbrowser.open(url)
 
     # ── Toast ─────────────────────────────────────────────────────────────────
+
+    def _heartbeat(self):
+        ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        engine = self._cfg.get('stt_engine', 'google')
+        entry = (f'[{ts}] alive | engine={engine} | '
+                 f'cards={len(self._cards)} | recording={self._recording}\n')
+        try:
+            with open(_LOG_FILE, 'a', encoding='utf-8') as f:
+                f.write(entry)
+        except Exception:
+            pass
+        self.after(300_000, self._heartbeat)
 
     def show_toast(self, msg, kind='success'):
         for w in self.winfo_children():
