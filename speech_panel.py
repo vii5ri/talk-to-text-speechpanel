@@ -56,9 +56,10 @@ _WHISPER_LANG = {'th-TH': 'th', 'en-US': 'en'}
 PANEL_W    = 880
 PANEL_H    = 980
 LEFT_W     = 520
-HOTKEY      = 'ctrl+shift+space'
-RECORD_KEY  = 'f10'
-DICTATE_KEY = 'f9'
+HOTKEY       = 'ctrl+shift+space'
+RECORD_KEY   = 'f10'
+DICTATE_KEY  = 'f9'
+COLLAPSE_KEY = 'f8'
 SAMPLERATE = 16000
 BLOCKSIZE  = 1024
 
@@ -528,9 +529,10 @@ class SettingsDialog(ctk.CTkToplevel):
         sec = self._sec(parent, '⌨️ ปุ่มคีย์ลัด')
         self._hk_vars = {}
         rows = [
-            ('hotkey_toggle',  'แสดง/ซ่อน panel',  'ctrl+shift+space'),
-            ('hotkey_record',  'เริ่ม/หยุดอัด',      'f10'),
-            ('hotkey_dictate', 'พูดใส่แอปอื่น',      'f9'),
+            ('hotkey_toggle',   'แสดง/ซ่อน panel',  'ctrl+shift+space'),
+            ('hotkey_collapse', 'ย่อ/ขยาย panel',    'f8'),
+            ('hotkey_record',   'เริ่ม/หยุดอัด',     'f10'),
+            ('hotkey_dictate',  'พูดใส่แอปอื่น',     'f9'),
         ]
         for cfg_key, label, default in rows:
             r = ctk.CTkFrame(sec, fg_color='transparent')
@@ -1401,6 +1403,14 @@ class SpeechPanel(ctk.CTk):
         if self._auto_collapse:
             self._monitor_leave()
 
+    def _toggle_collapse(self):
+        if self._edge_tab:          # currently collapsed → expand
+            self._expand_panel()
+        elif self._visible:         # currently visible → collapse to edge tab
+            self._collapse_panel()
+        else:                       # hidden to tray → show first
+            self._toggle_visibility()
+
     def _destroy_edge_tab(self):
         if self._edge_tab_pulse and self._edge_tab:
             try: self._edge_tab.after_cancel(self._edge_tab_pulse)
@@ -1595,9 +1605,10 @@ class SpeechPanel(ctk.CTk):
 
     def _register_hotkeys(self):
         pairs = [
-            (self._cfg.get('hotkey_toggle',  HOTKEY),      self._toggle_visibility),
-            (self._cfg.get('hotkey_record',  RECORD_KEY),  self._toggle_rec),
-            (self._cfg.get('hotkey_dictate', DICTATE_KEY), self._f9_hotkey_fired),
+            (self._cfg.get('hotkey_toggle',   HOTKEY),       self._toggle_visibility),
+            (self._cfg.get('hotkey_collapse', COLLAPSE_KEY), self._toggle_collapse),
+            (self._cfg.get('hotkey_record',   RECORD_KEY),   self._toggle_rec),
+            (self._cfg.get('hotkey_dictate',  DICTATE_KEY),  self._f9_hotkey_fired),
         ]
         res = self._hk_server.set_hotkeys(pairs)
         failed = [f'{c} (err {e})' for c, (ok, e) in res.items() if not ok]
