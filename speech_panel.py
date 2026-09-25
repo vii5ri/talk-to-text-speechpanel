@@ -219,6 +219,162 @@ def _canon_tokens(text: str, base: str) -> str:
         text = text.replace('  ', ' ')
     return text.strip()
 
+# ── RegisterHotKey system ─────────────────────────────────────────────────────
+_WM_HOTKEY    = 0x0312
+_MOD_NOREPEAT = 0x4000
+
+_MOD_TBL = {
+    'ctrl': 0x0002, 'control': 0x0002,
+    'alt':  0x0001,
+    'shift':0x0004,
+}
+
+_VK_TBL = {
+    'space': 0x20, 'enter': 0x0D, 'tab': 0x09, 'escape': 0x1B, 'esc': 0x1B,
+    'backspace': 0x08, 'delete': 0x2E, 'insert': 0x2D,
+    'home': 0x24, 'end': 0x23, 'pageup': 0x21, 'pagedown': 0x22,
+    'left': 0x25, 'up': 0x26, 'right': 0x27, 'down': 0x28,
+    'win': 0x5B, 'windows': 0x5B, 'lwin': 0x5B, 'rwin': 0x5C,
+    **{f'f{i}': 0x6F + i for i in range(1, 25)},
+    **{str(i): 0x30 + i for i in range(10)},
+    **{chr(c): ord(chr(c).upper()) for c in range(ord('a'), ord('z') + 1)},
+    **{chr(c): c for c in range(ord('A'), ord('Z') + 1)},
+}
+
+def _parse_hotkey(combo: str):
+    """'ctrl+shift+space' → (mods|NOREPEAT, vk) or None if unparseable."""
+    parts  = [p.strip().lower() for p in combo.split('+')]
+    mods   = _MOD_NOREPEAT
+    vk     = None
+    wins   = []   # 'win'/'windows' tokens — ambiguous modifier-or-vk
+    for p in parts:
+        if p in _MOD_TBL:
+            mods |= _MOD_TBL[p]
+        elif p in ('win', 'windows', 'lwin', 'rwin'):
+            wins.append(p)
+        elif p in _VK_TBL:
+            vk = _VK_TBL[p]
+    if vk is None and wins:          # win/windows is the trigger key
+        vk = _VK_TBL[wins[0]]
+    elif wins:                        # win/windows is a modifier (win+s style)
+        mods |= 0x0008
+    return (mods, vk) if vk is not None else None
+
+
+class _HotkeyServer:
+    """Hidden message-only window that owns RegisterHotKey registrations.
+    Unlike low-level keyboard hooks, RegisterHotKey never times out."""
+
+    _CLS = 'SpeechPanel_HK_v2'
+    _HWND_MESSAGE = -3
+
+    def __init__(self):
+        self._hwnd      = None
+        self._callbacks = {}      # id → callable
+        self._next_id   = 1
+        self._lock      = threading.Lock()
+        self._ready     = threading.Event()
+        threading.Thread(target=self._loop, daemon=True).start()
+        self._ready.wait(timeout=3.0)
+
+    # ── Public API ────────────────────────────────────────────────────────────
+
+    def register(self, combo: str, cb) -> bool:
+        """Register a hotkey string. Returns True on success."""
+        parsed = _parse_hotkey(combo)
+        if not parsed or not self._hwnd:
+            return False
+        mods, vk = parsed
+        with self._lock:
+            hk_id = self._next_id
+            self._next_id += 1
+        ok = bool(ctypes.windll.user32.RegisterHotKey(self._hwnd, hk_id, mods, vk))
+        if ok:
+            with self._lock:
+                self._callbacks[hk_id] = cb
+        return ok
+
+    def unregister_all(self):
+        if not self._hwnd:
+            return
+        with self._lock:
+            ids = list(self._callbacks.keys())
+        for hk_id in ids:
+            ctypes.windll.user32.UnregisterHotKey(self._hwnd, hk_id)
+        with self._lock:
+            self._callbacks.clear()
+
+    def stop(self):
+        if self._hwnd:
+            ctypes.windll.user32.PostMessageW(self._hwnd, 0x0010, 0, 0)
+
+    # ── Message loop (runs in daemon thread) ──────────────────────────────────
+
+    def _loop(self):
+        user32   = ctypes.windll.user32
+        kernel32 = ctypes.windll.kernel32
+        hInst    = kernel32.GetModuleHandleW(None)
+
+        WndProcType = ctypes.WINFUNCTYPE(
+            ctypes.c_long, ctypes.c_void_p, ctypes.c_uint,
+            ctypes.c_size_t, ctypes.c_ssize_t)
+
+        def _wnd_proc(hwnd, msg, wp, lp):
+            if msg == _WM_HOTKEY:
+                with self._lock:
+                    cb = self._callbacks.get(wp)
+                if cb:
+                    try: cb()
+                    except Exception: pass
+            elif msg == 0x0010:           # WM_CLOSE
+                user32.PostQuitMessage(0)
+            return user32.DefWindowProcW(hwnd, msg, wp, lp)
+
+        self._proc_ref = WndProcType(_wnd_proc)   # keep reference alive
+
+        class _WNDCLASSEXW(ctypes.Structure):
+            _fields_ = [
+                ('cbSize',        ctypes.c_uint),
+                ('style',         ctypes.c_uint),
+                ('lpfnWndProc',   WndProcType),
+                ('cbClsExtra',    ctypes.c_int),
+                ('cbWndExtra',    ctypes.c_int),
+                ('hInstance',     ctypes.c_void_p),
+                ('hIcon',         ctypes.c_void_p),
+                ('hCursor',       ctypes.c_void_p),
+                ('hbrBackground', ctypes.c_void_p),
+                ('lpszMenuName',  ctypes.c_wchar_p),
+                ('lpszClassName', ctypes.c_wchar_p),
+                ('hIconSm',       ctypes.c_void_p),
+            ]
+
+        wc = _WNDCLASSEXW()
+        wc.cbSize        = ctypes.sizeof(_WNDCLASSEXW)
+        wc.lpfnWndProc   = self._proc_ref
+        wc.hInstance     = hInst
+        wc.lpszClassName = self._CLS
+        user32.RegisterClassExW(ctypes.byref(wc))
+
+        hwnd = user32.CreateWindowExW(
+            0, self._CLS, None, 0, 0, 0, 0, 0,
+            self._HWND_MESSAGE, None, hInst, None)
+        self._hwnd = hwnd
+        self._ready.set()
+
+        msg = ctypes.wintypes.MSG()
+        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
+            user32.TranslateMessage(ctypes.byref(msg))
+            user32.DispatchMessageW(ctypes.byref(msg))
+
+        # Cleanup on exit
+        with self._lock:
+            for hk_id in self._callbacks:
+                user32.UnregisterHotKey(hwnd, hk_id)
+        user32.DestroyWindow(hwnd)
+        user32.UnregisterClassW(self._CLS, hInst)
+        self._hwnd = None
+
+
 # ── Palette ───────────────────────────────────────────────────────────────────
 _DARK = dict(bg='#0f172a', header='#1e293b', card='#1e293b', card2='#0f172a',
              combined='#060d17', accent='#3b82f6', purple='#7c3aed',
@@ -602,8 +758,8 @@ class SpeechPanel(ctk.CTk):
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         self._hotkey_handles = []
+        self._hk_server = _HotkeyServer()
         self._register_hotkeys()
-        self.after(60_000, self._recheck_hotkeys)
         self._init_tray()
         self.after(300_000, self._heartbeat)
         self._whisper = None
@@ -1385,6 +1541,8 @@ class SpeechPanel(ctk.CTk):
             try: self._tray.stop()
             except Exception: pass
         self._destroy_edge_tab()
+        try: self._hk_server.stop()
+        except Exception: pass
         try: keyboard.unhook_all()
         except Exception: pass
         self.destroy()
@@ -1393,10 +1551,7 @@ class SpeechPanel(ctk.CTk):
     # ── Hotkey registration ───────────────────────────────────────────────────
 
     def _register_hotkeys(self):
-        for h in self._hotkey_handles:
-            try: keyboard.remove_hotkey(h)
-            except Exception: pass
-        self._hotkey_handles = []
+        self._hk_server.unregister_all()
         hk_toggle  = self._cfg.get('hotkey_toggle',  HOTKEY)
         hk_record  = self._cfg.get('hotkey_record',  RECORD_KEY)
         hk_dictate = self._cfg.get('hotkey_dictate', DICTATE_KEY)
@@ -1406,9 +1561,8 @@ class SpeechPanel(ctk.CTk):
             (hk_record,  lambda: self.after(0, self._toggle_rec),        'อัดเสียง'),
             (hk_dictate, self._f9_hotkey_fired,                          'Dictate'),
         ]:
-            try:
-                self._hotkey_handles.append(keyboard.add_hotkey(key, cb))
-            except Exception:
+            ok = self._hk_server.register(key, cb)
+            if not ok:
                 failed.append(label)
         if failed and not getattr(self, '_hotkey_fail_notified', False):
             self._hotkey_fail_notified = True
@@ -1416,10 +1570,6 @@ class SpeechPanel(ctk.CTk):
                 f'⚠️ ลงทะเบียน hotkey ไม่สำเร็จ: {", ".join(keys)}', 'error'))
         elif not failed:
             self._hotkey_fail_notified = False
-
-    def _recheck_hotkeys(self):
-        self._register_hotkeys()
-        self.after(60_000, self._recheck_hotkeys)
 
     # ── System tray ───────────────────────────────────────────────────────────
 
