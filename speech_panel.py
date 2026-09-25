@@ -270,6 +270,140 @@ class AddVocabDialog(ctk.CTkToplevel):
         self.destroy()
 
 
+# ── Settings dialog ───────────────────────────────────────────────────────────
+class SettingsDialog(ctk.CTkToplevel):
+    """Settings: API Key, Hotkeys, Max Segments."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self._parent   = parent
+        self._cfg      = parent._cfg
+        self._api_show = False
+        self.title('ตั้งค่า')
+        self.geometry('500x570')
+        self.resizable(False, False)
+        self.attributes('-topmost', True)
+        self.grab_set()
+        self._build()
+
+    def _sec(self, parent, title):
+        f = ctk.CTkFrame(parent, fg_color=C['card'], corner_radius=8,
+                         border_width=1, border_color=C['border'])
+        f.pack(fill='x', pady=(0, 8))
+        ctk.CTkLabel(f, text=title, font=_f(12,'bold'),
+                     text_color=C['accent']).pack(anchor='w', padx=12, pady=(8,4))
+        return f
+
+    def _build(self):
+        ctk.CTkLabel(self, text='⚙️ ตั้งค่า', font=_f(16,'bold'),
+                     text_color=C['text']).pack(pady=(14,6))
+        scroll = ctk.CTkScrollableFrame(self, fg_color='transparent')
+        scroll.pack(fill='both', expand=True, padx=14, pady=(0,6))
+        self._build_api(scroll)
+        self._build_hotkeys(scroll)
+        self._build_segments(scroll)
+        ctk.CTkButton(self, text='💾 บันทึกทั้งหมด', height=38, font=_f(13,'bold'),
+                      fg_color=C['accent'], hover_color=C['purple'],
+                      command=self._save_all).pack(fill='x', padx=14, pady=(0,14))
+
+    # ── API Key ────────────────────────────────────────────────────────────────
+    def _build_api(self, parent):
+        sec = self._sec(parent, '🔑 Groq API Key')
+        row = ctk.CTkFrame(sec, fg_color='transparent')
+        row.pack(fill='x', padx=12, pady=(0,4))
+        self._api_e = ctk.CTkEntry(row, font=_f(12), show='*',
+                                   placeholder_text='วาง Groq API Key ที่นี่...')
+        self._api_e.pack(side='left', fill='x', expand=True, padx=(0,6))
+        cur = self._cfg.get('gemini_api_key', '')
+        if cur:
+            self._api_e.insert(0, cur)
+        ctk.CTkButton(row, text='👁', width=36, height=30,
+                      font=ctk.CTkFont(size=14),
+                      fg_color=C['card2'], hover_color=C['border'],
+                      command=self._toggle_api_vis).pack(side='left')
+        ctk.CTkLabel(sec, text='รับฟรีที่ console.groq.com → API Keys',
+                     font=_f(10), text_color=C['sub']).pack(anchor='w', padx=12, pady=(0,10))
+
+    def _toggle_api_vis(self):
+        self._api_show = not self._api_show
+        self._api_e.configure(show='' if self._api_show else '*')
+
+    # ── Hotkeys ────────────────────────────────────────────────────────────────
+    def _build_hotkeys(self, parent):
+        sec = self._sec(parent, '⌨️ ปุ่มคีย์ลัด')
+        self._hk_vars = {}
+        rows = [
+            ('hotkey_toggle',  'แสดง/ซ่อน panel',  'ctrl+shift+space'),
+            ('hotkey_record',  'เริ่ม/หยุดอัด',      'f10'),
+            ('hotkey_dictate', 'พูดใส่แอปอื่น',      'f9'),
+        ]
+        for cfg_key, label, default in rows:
+            r = ctk.CTkFrame(sec, fg_color='transparent')
+            r.pack(fill='x', padx=12, pady=3)
+            ctk.CTkLabel(r, text=label, font=_f(11), text_color=C['text'],
+                         width=148, anchor='w').pack(side='left')
+            var = tk.StringVar(value=self._cfg.get(cfg_key, default))
+            self._hk_vars[cfg_key] = var
+            ctk.CTkEntry(r, textvariable=var, font=_f(11), width=158,
+                         state='readonly').pack(side='left', padx=(4,4))
+            btn = ctk.CTkButton(r, text='🎯 จับ', width=68, height=28, font=_f(11),
+                                fg_color=C['card2'], hover_color=C['purple'])
+            btn.configure(command=lambda b=btn, v=var: self._capture(b, v))
+            btn.pack(side='left')
+        ctk.CTkLabel(sec,
+                     text='กด "🎯 จับ" → กด shortcut ที่ต้องการ  |  Esc = ยกเลิก',
+                     font=_f(10), text_color=C['sub']).pack(anchor='w', padx=12, pady=(2,10))
+
+    def _capture(self, btn, var):
+        btn.configure(text='⏳ รอ...', fg_color=C['purple'], state='disabled')
+        def _do():
+            try:
+                hk = keyboard.read_hotkey(suppress=False)
+                if hk.lower() != 'escape':
+                    self.after(0, lambda h=hk: var.set(h))
+            except Exception:
+                pass
+            self.after(0, lambda: btn.configure(
+                text='🎯 จับ', fg_color=C['card2'], state='normal'))
+        threading.Thread(target=_do, daemon=True).start()
+
+    # ── Max segments ───────────────────────────────────────────────────────────
+    def _build_segments(self, parent):
+        sec = self._sec(parent, '📦 จำนวนกล่องข้อความสูงสุด')
+        row = ctk.CTkFrame(sec, fg_color='transparent')
+        row.pack(fill='x', padx=12, pady=(0,4))
+        ctk.CTkLabel(row, text='สูงสุด:', font=_f(12),
+                     text_color=C['text']).pack(side='left', padx=(0,8))
+        opts = ['ไม่จำกัด', '20', '40', '60', '100']
+        cur  = self._cfg.get('max_segments', 0)
+        self._seg_var = tk.StringVar(value=str(cur) if cur > 0 else 'ไม่จำกัด')
+        ctk.CTkOptionMenu(row, variable=self._seg_var, values=opts,
+                          width=130, height=30, font=_f(12),
+                          fg_color=C['card2'], button_color=C['accent'],
+                          button_hover_color=C['purple'],
+                          text_color=C['text']).pack(side='left')
+        ctk.CTkLabel(sec, text='เมื่อครบ → กล่องเก่าสุดถูกลบอัตโนมัติ',
+                     font=_f(10), text_color=C['sub']).pack(anchor='w', padx=12, pady=(0,10))
+
+    # ── Save ───────────────────────────────────────────────────────────────────
+    def _save_all(self):
+        self._cfg['gemini_api_key'] = self._api_e.get().strip()
+        self._parent._gemini_key    = self._cfg['gemini_api_key']
+        hk_changed = False
+        for cfg_key, var in self._hk_vars.items():
+            v = var.get().strip().lower()
+            if v and v != self._cfg.get(cfg_key, ''):
+                self._cfg[cfg_key] = v
+                hk_changed = True
+        if hk_changed:
+            self._parent._register_hotkeys()
+        sel = self._seg_var.get()
+        self._cfg['max_segments']      = 0 if sel == 'ไม่จำกัด' else int(sel)
+        self._parent._max_segments     = self._cfg['max_segments']
+        _save_cfg(self._cfg)
+        self._parent.show_toast('💾 บันทึกการตั้งค่าแล้ว')
+        self.destroy()
+
+
 # ── Segment card ──────────────────────────────────────────────────────────────
 class SegmentCard(ctk.CTkFrame):
     def __init__(self, parent, text, seg_id, *,
@@ -446,6 +580,7 @@ class SpeechPanel(ctk.CTk):
         self._auto_expand     = self._cfg.get('auto_expand', True)   # edge-tab hover → expand
         self._leave_job       = None
         self._gemini_key      = self._cfg.get('gemini_api_key', '')
+        self._max_segments    = self._cfg.get('max_segments', 0)
         self._audio_level     = 0.0
         self._level_anim_job  = None
 
@@ -538,9 +673,9 @@ class SpeechPanel(ctk.CTk):
                       hover_color=C['card'], font=ctk.CTkFont(size=20), text_color=C['sub'],
                       command=self._toggle_visibility).pack(side='right', padx=(0,2))
         # Gemini API key settings
-        ctk.CTkButton(hdr, text='🔑', width=36, height=36, fg_color='transparent',
+        ctk.CTkButton(hdr, text='⚙️', width=36, height=36, fg_color='transparent',
                       hover_color=C['card'], font=ctk.CTkFont(size=15), text_color=C['sub'],
-                      command=self._set_gemini_key).pack(side='right', padx=(0, 2))
+                      command=self._open_settings).pack(side='right', padx=(0, 2))
         # AI Chat launcher (header)
         ctk.CTkButton(hdr, text='🤖', width=38, height=34,
                       fg_color=C['accent'], hover_color=C['purple'],
@@ -1232,11 +1367,14 @@ class SpeechPanel(ctk.CTk):
             try: keyboard.remove_hotkey(h)
             except Exception: pass
         self._hotkey_handles = []
+        hk_toggle  = self._cfg.get('hotkey_toggle',  HOTKEY)
+        hk_record  = self._cfg.get('hotkey_record',  RECORD_KEY)
+        hk_dictate = self._cfg.get('hotkey_dictate', DICTATE_KEY)
         failed = []
         for key, cb, label in [
-            (HOTKEY,      lambda: self.after(0, self._toggle_visibility), 'Ctrl+Shift+Space'),
-            (RECORD_KEY,  lambda: self.after(0, self._toggle_rec),        'F10'),
-            (DICTATE_KEY, lambda: self.after(0, self._f9_toggle),         'F9'),
+            (hk_toggle,  lambda: self.after(0, self._toggle_visibility), 'แสดง/ซ่อน'),
+            (hk_record,  lambda: self.after(0, self._toggle_rec),        'อัดเสียง'),
+            (hk_dictate, lambda: self.after(0, self._f9_toggle),         'Dictate'),
         ]:
             try:
                 self._hotkey_handles.append(keyboard.add_hotkey(key, cb))
@@ -1578,6 +1716,11 @@ class SpeechPanel(ctk.CTk):
 
     def _add_segment(self, text):
         if self._empty_lbl.winfo_ismapped(): self._empty_lbl.pack_forget()
+        # Enforce max segments — drop oldest card when limit reached
+        if self._max_segments > 0:
+            while len(self._cards) >= self._max_segments:
+                oldest = self._cards.pop()
+                oldest.pack_forget(); oldest.destroy()
         self._seg_id += 1
         card = SegmentCard(self._seg_frame, text, self._seg_id,
                            on_delete=self._delete_segment, show_toast=self.show_toast,
@@ -1688,11 +1831,14 @@ class SpeechPanel(ctk.CTk):
         _save_cfg(self._cfg)
         self.show_toast('บันทึก API Key แล้ว' if key else 'ล้าง API Key แล้ว')
 
+    def _open_settings(self):
+        SettingsDialog(self)
+
     def _polish_card(self, card):
         key = self._gemini_key.strip()
         if not key:
-            self.show_toast('กรุณาตั้งค่า Groq API Key ก่อน (กด 🔑)', 'error')
-            self._set_gemini_key()
+            self.show_toast('กรุณาตั้งค่า Groq API Key ก่อน (กด ⚙️)', 'error')
+            self._open_settings()
             return
         text = card.get_text()
         if not text:
