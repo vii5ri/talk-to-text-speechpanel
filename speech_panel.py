@@ -4,9 +4,9 @@
 Speech Panel v2 — Thai / English Speech-to-Text
 กด Ctrl+Shift+Space เพื่อแสดง/ซ่อน  |  F10 เพื่อเริ่ม/หยุด  |  F9 พูดใส่แอปอื่น
 """
-import threading, io, wave, time, json, re
+import threading, io, wave, time, json, re, queue
 import os, sys, webbrowser
-import datetime, traceback, ctypes
+import datetime, traceback, ctypes, ctypes.wintypes as _wt
 import tkinter as tk
 from tkinter import messagebox
 import customtkinter as ctk
@@ -221,14 +221,12 @@ def _canon_tokens(text: str, base: str) -> str:
 
 # ── RegisterHotKey system ─────────────────────────────────────────────────────
 _WM_HOTKEY    = 0x0312
+_WM_CLOSE     = 0x0010
+_WM_APP_REG   = 0x8001      # WM_APP+1: (re)register all pending combos in owner thread
 _MOD_NOREPEAT = 0x4000
 
-_MOD_TBL = {
-    'ctrl': 0x0002, 'control': 0x0002,
-    'alt':  0x0001,
-    'shift':0x0004,
-}
-
+_MOD_TBL  = {'ctrl': 0x0002, 'control': 0x0002, 'alt': 0x0001, 'shift': 0x0004}
+_WIN_NAMES = ('win', 'windows', 'lwin', 'rwin')
 _VK_TBL = {
     'space': 0x20, 'enter': 0x0D, 'tab': 0x09, 'escape': 0x1B, 'esc': 0x1B,
     'backspace': 0x08, 'delete': 0x2E, 'insert': 0x2D,
@@ -238,141 +236,172 @@ _VK_TBL = {
     **{f'f{i}': 0x6F + i for i in range(1, 25)},
     **{str(i): 0x30 + i for i in range(10)},
     **{chr(c): ord(chr(c).upper()) for c in range(ord('a'), ord('z') + 1)},
-    **{chr(c): c for c in range(ord('A'), ord('Z') + 1)},
 }
 
 def _parse_hotkey(combo: str):
-    """'ctrl+shift+space' → (mods|NOREPEAT, vk) or None if unparseable."""
-    parts  = [p.strip().lower() for p in combo.split('+')]
-    mods   = _MOD_NOREPEAT
-    vk     = None
-    wins   = []   # 'win'/'windows' tokens — ambiguous modifier-or-vk
+    parts = [p.strip().lower() for p in combo.split('+') if p.strip()]
+    mods, vk, wins = _MOD_NOREPEAT, None, []
     for p in parts:
         if p in _MOD_TBL:
             mods |= _MOD_TBL[p]
-        elif p in ('win', 'windows', 'lwin', 'rwin'):
+        elif p in _WIN_NAMES:
             wins.append(p)
         elif p in _VK_TBL:
             vk = _VK_TBL[p]
-    if vk is None and wins:          # win/windows is the trigger key
+        else:
+            return None
+    if vk is None and wins:
         vk = _VK_TBL[wins[0]]
-    elif wins:                        # win/windows is a modifier (win+s style)
+    elif wins:
         mods |= 0x0008
     return (mods, vk) if vk is not None else None
 
 
-class _HotkeyServer:
-    """Hidden message-only window that owns RegisterHotKey registrations.
-    Unlike low-level keyboard hooks, RegisterHotKey never times out."""
+# x64-correct Win32 prototypes on a private DLL handle (don't touch windll globals)
+_u32 = ctypes.WinDLL('user32', use_last_error=True)
+_k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+_LRESULT = ctypes.c_ssize_t
+_WNDPROC  = ctypes.WINFUNCTYPE(_LRESULT, _wt.HWND, _wt.UINT, _wt.WPARAM, _wt.LPARAM)
 
-    _CLS = 'SpeechPanel_HK_v2'
-    _HWND_MESSAGE = -3
+class _WNDCLASSEXW(ctypes.Structure):
+    _fields_ = [('cbSize', _wt.UINT), ('style', _wt.UINT), ('lpfnWndProc', _WNDPROC),
+                ('cbClsExtra', ctypes.c_int), ('cbWndExtra', ctypes.c_int),
+                ('hInstance', _wt.HINSTANCE), ('hIcon', _wt.HICON), ('hCursor', _wt.HANDLE),
+                ('hbrBackground', _wt.HBRUSH), ('lpszMenuName', _wt.LPCWSTR),
+                ('lpszClassName', _wt.LPCWSTR), ('hIconSm', _wt.HICON)]
+
+_k32.GetModuleHandleW.restype  = _wt.HMODULE
+_k32.GetModuleHandleW.argtypes = [_wt.LPCWSTR]
+_u32.RegisterClassExW.restype  = _wt.ATOM
+_u32.RegisterClassExW.argtypes = [ctypes.POINTER(_WNDCLASSEXW)]
+_u32.CreateWindowExW.restype   = _wt.HWND
+_u32.CreateWindowExW.argtypes  = [_wt.DWORD, _wt.LPCWSTR, _wt.LPCWSTR, _wt.DWORD,
+                                   ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int,
+                                   _wt.HWND, _wt.HMENU, _wt.HINSTANCE, _wt.LPVOID]
+_u32.DefWindowProcW.restype    = _LRESULT
+_u32.DefWindowProcW.argtypes   = [_wt.HWND, _wt.UINT, _wt.WPARAM, _wt.LPARAM]
+_u32.RegisterHotKey.restype    = _wt.BOOL
+_u32.RegisterHotKey.argtypes   = [_wt.HWND, ctypes.c_int, _wt.UINT, _wt.UINT]
+_u32.UnregisterHotKey.restype  = _wt.BOOL
+_u32.UnregisterHotKey.argtypes = [_wt.HWND, ctypes.c_int]
+_u32.SendMessageW.restype      = _LRESULT
+_u32.SendMessageW.argtypes     = [_wt.HWND, _wt.UINT, _wt.WPARAM, _wt.LPARAM]
+_u32.PostMessageW.restype      = _wt.BOOL
+_u32.PostMessageW.argtypes     = [_wt.HWND, _wt.UINT, _wt.WPARAM, _wt.LPARAM]
+_u32.GetMessageW.restype       = _wt.BOOL
+_u32.GetMessageW.argtypes      = [ctypes.POINTER(_wt.MSG), _wt.HWND, _wt.UINT, _wt.UINT]
+_u32.DispatchMessageW.restype  = _LRESULT
+_u32.DispatchMessageW.argtypes = [ctypes.POINTER(_wt.MSG)]
+_u32.TranslateMessage.argtypes = [ctypes.POINTER(_wt.MSG)]
+_u32.DestroyWindow.argtypes    = [_wt.HWND]
+_u32.UnregisterClassW.argtypes = [_wt.LPCWSTR, _wt.HINSTANCE]
+_HWND_MESSAGE = _wt.HWND(-3)
+
+
+class _HotkeyServer:
+    """Message-only window owning RegisterHotKey registrations.
+    ALL Register/UnregisterHotKey calls run on the owner thread (Win32 requirement).
+    Callbacks are NOT called on the hotkey thread — pushed to self.events,
+    which the Tk main thread drains via _pump_hotkeys polling."""
 
     def __init__(self):
-        self._hwnd      = None
-        self._callbacks = {}      # id → callable
-        self._next_id   = 1
-        self._lock      = threading.Lock()
-        self._ready     = threading.Event()
-        threading.Thread(target=self._loop, daemon=True).start()
+        self.events   = queue.SimpleQueue()   # callables for Tk thread
+        self._hwnd    = None
+        self._want    = {}                    # hk_id -> (combo, cb)
+        self._active  = {}                    # hk_id -> cb  (registered OK)
+        self._result  = {}                    # combo -> (ok, winerr)
+        self._next_id = 1
+        self._lock    = threading.Lock()
+        self._ready   = threading.Event()
+        self._thread  = threading.Thread(target=self._loop, daemon=True, name='HotkeyServer')
+        self._thread.start()
         self._ready.wait(timeout=3.0)
 
-    # ── Public API ────────────────────────────────────────────────────────────
+    def alive(self) -> bool:
+        return bool(self._hwnd) and self._thread.is_alive()
 
-    def register(self, combo: str, cb) -> bool:
-        """Register a hotkey string. Returns True on success."""
-        parsed = _parse_hotkey(combo)
-        if not parsed or not self._hwnd:
-            return False
-        mods, vk = parsed
+    def set_hotkeys(self, pairs):
+        """pairs: list[(combo, cb)]. Replaces all registrations.
+        Returns dict combo -> (ok, winerror). Safe to call from any thread."""
         with self._lock:
-            hk_id = self._next_id
-            self._next_id += 1
-        ok = bool(ctypes.windll.user32.RegisterHotKey(self._hwnd, hk_id, mods, vk))
-        if ok:
-            with self._lock:
-                self._callbacks[hk_id] = cb
-        return ok
-
-    def unregister_all(self):
-        if not self._hwnd:
-            return
+            self._want = {}
+            for combo, cb in pairs:
+                self._want[self._next_id] = (combo, cb)
+                self._next_id += 1
+        if not self.alive():
+            return {c: (False, -1) for c, _ in pairs}
+        _u32.SendMessageW(self._hwnd, _WM_APP_REG, 0, 0)   # sync call on owner thread
         with self._lock:
-            ids = list(self._callbacks.keys())
-        for hk_id in ids:
-            ctypes.windll.user32.UnregisterHotKey(self._hwnd, hk_id)
-        with self._lock:
-            self._callbacks.clear()
+            return dict(self._result)
 
     def stop(self):
         if self._hwnd:
-            ctypes.windll.user32.PostMessageW(self._hwnd, 0x0010, 0, 0)
+            _u32.PostMessageW(self._hwnd, _WM_CLOSE, 0, 0)
 
-    # ── Message loop (runs in daemon thread) ──────────────────────────────────
+    # -- owner thread: apply pending hotkey registrations ---------------------
+    def _apply(self, hwnd):
+        for hk_id in list(self._active):
+            _u32.UnregisterHotKey(hwnd, hk_id)
+        self._active.clear()
+        with self._lock:
+            want = dict(self._want)
+        result = {}
+        for hk_id, (combo, cb) in want.items():
+            parsed = _parse_hotkey(combo)
+            if not parsed:
+                result[combo] = (False, 87); continue
+            ok = bool(_u32.RegisterHotKey(hwnd, hk_id, parsed[0], parsed[1]))
+            result[combo] = (ok, 0 if ok else ctypes.get_last_error())
+            if ok:
+                self._active[hk_id] = cb
+        with self._lock:
+            self._result = result
 
     def _loop(self):
-        user32   = ctypes.windll.user32
-        kernel32 = ctypes.windll.kernel32
-        hInst    = kernel32.GetModuleHandleW(None)
-
-        WndProcType = ctypes.WINFUNCTYPE(
-            ctypes.c_long, ctypes.c_void_p, ctypes.c_uint,
-            ctypes.c_size_t, ctypes.c_ssize_t)
+        hInst = _k32.GetModuleHandleW(None)
+        cls_name = f'SpeechPanel_HK_{id(self):x}'   # unique per instance
 
         def _wnd_proc(hwnd, msg, wp, lp):
-            if msg == _WM_HOTKEY:
-                with self._lock:
-                    cb = self._callbacks.get(wp)
-                if cb:
-                    try: cb()
-                    except Exception: pass
-            elif msg == 0x0010:           # WM_CLOSE
-                user32.PostQuitMessage(0)
-            return user32.DefWindowProcW(hwnd, msg, wp, lp)
+            try:
+                if msg == _WM_HOTKEY:
+                    cb = self._active.get(wp)
+                    if cb: self.events.put(cb)
+                    return 0
+                if msg == _WM_APP_REG:
+                    self._apply(hwnd); return 0
+                if msg == _WM_CLOSE:
+                    _u32.DestroyWindow(hwnd); return 0
+                if msg == 0x0002:   # WM_DESTROY
+                    _u32.PostQuitMessage(0); return 0
+            except Exception:
+                pass
+            return _u32.DefWindowProcW(hwnd, msg, wp, lp)
 
-        self._proc_ref = WndProcType(_wnd_proc)   # keep reference alive
-
-        class _WNDCLASSEXW(ctypes.Structure):
-            _fields_ = [
-                ('cbSize',        ctypes.c_uint),
-                ('style',         ctypes.c_uint),
-                ('lpfnWndProc',   WndProcType),
-                ('cbClsExtra',    ctypes.c_int),
-                ('cbWndExtra',    ctypes.c_int),
-                ('hInstance',     ctypes.c_void_p),
-                ('hIcon',         ctypes.c_void_p),
-                ('hCursor',       ctypes.c_void_p),
-                ('hbrBackground', ctypes.c_void_p),
-                ('lpszMenuName',  ctypes.c_wchar_p),
-                ('lpszClassName', ctypes.c_wchar_p),
-                ('hIconSm',       ctypes.c_void_p),
-            ]
-
+        self._proc_ref = _WNDPROC(_wnd_proc)
         wc = _WNDCLASSEXW()
         wc.cbSize        = ctypes.sizeof(_WNDCLASSEXW)
         wc.lpfnWndProc   = self._proc_ref
         wc.hInstance     = hInst
-        wc.lpszClassName = self._CLS
-        user32.RegisterClassExW(ctypes.byref(wc))
-
-        hwnd = user32.CreateWindowExW(
-            0, self._CLS, None, 0, 0, 0, 0, 0,
-            self._HWND_MESSAGE, None, hInst, None)
+        wc.lpszClassName = cls_name
+        _u32.RegisterClassExW(ctypes.byref(wc))
+        hwnd = _u32.CreateWindowExW(0, cls_name, None, 0, 0, 0, 0, 0,
+                                    _HWND_MESSAGE, None, hInst, None)
         self._hwnd = hwnd
         self._ready.set()
-
-        msg = ctypes.wintypes.MSG()
-        while user32.GetMessageW(ctypes.byref(msg), None, 0, 0) != 0:
-            user32.TranslateMessage(ctypes.byref(msg))
-            user32.DispatchMessageW(ctypes.byref(msg))
-
-        # Cleanup on exit
-        with self._lock:
-            for hk_id in self._callbacks:
-                user32.UnregisterHotKey(hwnd, hk_id)
-        user32.DestroyWindow(hwnd)
-        user32.UnregisterClassW(self._CLS, hInst)
+        if not hwnd:
+            return
+        msg = _wt.MSG()
+        while True:
+            r = _u32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+            if r == 0 or r == -1:
+                break
+            _u32.TranslateMessage(ctypes.byref(msg))
+            _u32.DispatchMessageW(ctypes.byref(msg))
+        for hk_id in list(self._active):
+            _u32.UnregisterHotKey(hwnd, hk_id)
+        self._active.clear()
         self._hwnd = None
+        _u32.UnregisterClassW(cls_name, hInst)
 
 
 # ── Palette ───────────────────────────────────────────────────────────────────
@@ -757,9 +786,9 @@ class SpeechPanel(ctk.CTk):
         self._update_auto_expand_btn()
         if self._auto_collapse and not self._edge_tab_locked:
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
-        self._hotkey_handles = []
         self._hk_server = _HotkeyServer()
         self._register_hotkeys()
+        self.after(20, self._pump_hotkeys)
         self._init_tray()
         self.after(300_000, self._heartbeat)
         self._whisper = None
@@ -1550,24 +1579,31 @@ class SpeechPanel(ctk.CTk):
 
     # ── Hotkey registration ───────────────────────────────────────────────────
 
+    def _pump_hotkeys(self):
+        """Drain hotkey event queue on the Tk main thread + watchdog."""
+        try:
+            while True:
+                cb = self._hk_server.events.get_nowait()
+                try: cb()
+                except Exception: pass
+        except queue.Empty:
+            pass
+        if not self._hk_server.alive():
+            self._hk_server = _HotkeyServer()
+            self._register_hotkeys()
+        self.after(20, self._pump_hotkeys)
+
     def _register_hotkeys(self):
-        self._hk_server.unregister_all()
-        hk_toggle  = self._cfg.get('hotkey_toggle',  HOTKEY)
-        hk_record  = self._cfg.get('hotkey_record',  RECORD_KEY)
-        hk_dictate = self._cfg.get('hotkey_dictate', DICTATE_KEY)
-        failed = []
-        for key, cb, label in [
-            (hk_toggle,  lambda: self.after(0, self._toggle_visibility), 'แสดง/ซ่อน'),
-            (hk_record,  lambda: self.after(0, self._toggle_rec),        'อัดเสียง'),
-            (hk_dictate, self._f9_hotkey_fired,                          'Dictate'),
-        ]:
-            ok = self._hk_server.register(key, cb)
-            if not ok:
-                failed.append(label)
+        pairs = [
+            (self._cfg.get('hotkey_toggle',  HOTKEY),      self._toggle_visibility),
+            (self._cfg.get('hotkey_record',  RECORD_KEY),  self._toggle_rec),
+            (self._cfg.get('hotkey_dictate', DICTATE_KEY), self._f9_hotkey_fired),
+        ]
+        res = self._hk_server.set_hotkeys(pairs)
+        failed = [f'{c} (err {e})' for c, (ok, e) in res.items() if not ok]
         if failed and not getattr(self, '_hotkey_fail_notified', False):
             self._hotkey_fail_notified = True
-            self.after(0, lambda keys=failed: self.show_toast(
-                f'⚠️ ลงทะเบียน hotkey ไม่สำเร็จ: {", ".join(keys)}', 'error'))
+            self.show_toast(f'⚠️ ลงทะเบียน hotkey ไม่สำเร็จ: {", ".join(failed)}', 'error')
         elif not failed:
             self._hotkey_fail_notified = False
 
@@ -1608,10 +1644,10 @@ class SpeechPanel(ctk.CTk):
     # ── F9 direct dictation ───────────────────────────────────────────────────
 
     def _f9_hotkey_fired(self):
-        # Called from keyboard background thread — capture hwnd NOW before focus shifts
-        u = ctypes.windll.user32
-        hwnd = u.GetForegroundWindow()
-        self.after(0, lambda h=hwnd: self._f9_toggle(h))
+        # Called on Tk main thread via _pump_hotkeys (~20ms after key press).
+        # GetForegroundWindow() still reflects the previous app at this latency.
+        hwnd = ctypes.windll.user32.GetForegroundWindow()
+        self._f9_toggle(hwnd)
 
     def _f9_toggle(self, captured_hwnd=None):
         if self._recording:
