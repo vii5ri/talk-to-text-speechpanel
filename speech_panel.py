@@ -115,6 +115,17 @@ def _write_crash_log(exc_type, exc_value, exc_tb):
     except Exception:
         pass
 
+def _trim_log(path: str, max_lines: int = 500):
+    """Keep only the last max_lines lines in the log file."""
+    try:
+        with open(path, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        if len(lines) > max_lines:
+            with open(path, 'w', encoding='utf-8') as f:
+                f.writelines(lines[-max_lines:])
+    except Exception:
+        pass
+
 def _setup_crash_handler():
     def _excepthook(exc_type, exc_value, exc_tb):
         if issubclass(exc_type, KeyboardInterrupt):
@@ -592,7 +603,7 @@ class SpeechPanel(ctk.CTk):
             self.after(300, self._monitor_leave)   # small delay for window to finish rendering
         self._hotkey_handles = []
         self._register_hotkeys()
-        self.after(10_000, self._recheck_hotkeys)
+        self.after(60_000, self._recheck_hotkeys)
         self._init_tray()
         self.after(300_000, self._heartbeat)
         self._whisper = None
@@ -1085,13 +1096,32 @@ class SpeechPanel(ctk.CTk):
 
     # ── Visibility ────────────────────────────────────────────────────────────
 
+    def _deiconify_at_snap(self):
+        """Pre-render window off-screen then snap to edge — eliminates partial-render flicker."""
+        sw = self.winfo_screenwidth()
+        sh = self.winfo_screenheight()
+        pw = self.winfo_width()  if self.winfo_width()  > 1 else PANEL_W
+        ph = self.winfo_height() if self.winfo_height() > 1 else PANEL_H
+        positions = {
+            'left':   (0,        max(0, (sh - ph) // 2)),
+            'right':  (sw - pw,  max(0, (sh - ph) // 2)),
+            'top':    (max(0, (sw - pw) // 2), 0),
+            'bottom': (max(0, (sw - pw) // 2), sh - ph),
+        }
+        tx, ty = positions.get(self._snap_edge, (0, 0))
+        self.geometry(f'{pw}x{ph}+{sw + 100}+0')   # render off-screen
+        self.deiconify()
+        self.update_idletasks()                      # force complete render
+        self.geometry(f'+{tx}+{ty}')                # snap in — already rendered
+        self.lift()
+
     def _toggle_visibility(self):
         if self._visible:
             self._visible = False
             self.withdraw()
         else:
             self._destroy_edge_tab()
-            self.deiconify(); self.lift()
+            self._deiconify_at_snap()
             self._visible = True
             if self._auto_collapse and not self._edge_tab_locked:
                 self._monitor_leave()
@@ -1179,7 +1209,7 @@ class SpeechPanel(ctk.CTk):
 
     def _expand_panel(self):
         self._destroy_edge_tab()
-        self.deiconify(); self.lift()
+        self._deiconify_at_snap()
         self._visible = True
         self._update_lock_btn()
         self._update_auto_expand_btn()
@@ -1374,7 +1404,7 @@ class SpeechPanel(ctk.CTk):
         for key, cb, label in [
             (hk_toggle,  lambda: self.after(0, self._toggle_visibility), 'แสดง/ซ่อน'),
             (hk_record,  lambda: self.after(0, self._toggle_rec),        'อัดเสียง'),
-            (hk_dictate, lambda: self.after(0, self._f9_toggle),         'Dictate'),
+            (hk_dictate, self._f9_hotkey_fired,                          'Dictate'),
         ]:
             try:
                 self._hotkey_handles.append(keyboard.add_hotkey(key, cb))
@@ -1389,7 +1419,7 @@ class SpeechPanel(ctk.CTk):
 
     def _recheck_hotkeys(self):
         self._register_hotkeys()
-        self.after(10_000, self._recheck_hotkeys)
+        self.after(60_000, self._recheck_hotkeys)
 
     # ── System tray ───────────────────────────────────────────────────────────
 
@@ -1427,7 +1457,13 @@ class SpeechPanel(ctk.CTk):
 
     # ── F9 direct dictation ───────────────────────────────────────────────────
 
-    def _f9_toggle(self):
+    def _f9_hotkey_fired(self):
+        # Called from keyboard background thread — capture hwnd NOW before focus shifts
+        u = ctypes.windll.user32
+        hwnd = u.GetForegroundWindow()
+        self.after(0, lambda h=hwnd: self._f9_toggle(h))
+
+    def _f9_toggle(self, captured_hwnd=None):
         if self._recording:
             if self._f9_target is None:
                 self.show_toast('กำลังอัดโหมดปกติอยู่ — ใช้ F9 ไม่ได้', 'error')
@@ -1435,7 +1471,7 @@ class SpeechPanel(ctk.CTk):
             self._stop_rec()
             return
         u = ctypes.windll.user32
-        hwnd = u.GetForegroundWindow()
+        hwnd = captured_hwnd if captured_hwnd is not None else u.GetForegroundWindow()
         own_wins = {u.GetAncestor(self.winfo_id(), 2)}
         for w in (self._edge_tab, self._edge_tab_hover):
             if w:
@@ -1459,14 +1495,15 @@ class SpeechPanel(ctk.CTk):
             except Exception: old = None
             if u.GetForegroundWindow() != target:
                 u.SetForegroundWindow(target)
-                time.sleep(0.15)
+                time.sleep(0.25)
             if u.GetForegroundWindow() != target:
                 self.after(0, lambda: self.show_toast(
                     'สลับไปหน้าต่างเป้าหมายไม่ได้ — เก็บลงการ์ดอย่างเดียว', 'info'))
                 return
             pyperclip.copy(text)
+            time.sleep(0.1)        # wait for clipboard to be ready
             keyboard.send('ctrl+v')
-            time.sleep(0.15)
+            time.sleep(0.45)       # wait for app to finish pasting before restoring
             if old is not None:
                 pyperclip.copy(old)
         threading.Thread(target=_worker, daemon=True).start()
@@ -1916,6 +1953,7 @@ class SpeechPanel(ctk.CTk):
         try:
             with open(_LOG_FILE, 'a', encoding='utf-8') as f:
                 f.write(entry)
+            _trim_log(_LOG_FILE)
         except Exception:
             pass
         self.after(300_000, self._heartbeat)
