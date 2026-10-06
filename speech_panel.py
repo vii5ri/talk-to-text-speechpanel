@@ -178,13 +178,20 @@ def _load_cfg() -> dict:
     try:
         with open(_CFG, encoding='utf-8') as f:
             return json.load(f)
+    except json.JSONDecodeError:
+        import shutil
+        try: shutil.copy2(_CFG, _CFG + '.corrupt')
+        except Exception: pass
+        return {}
     except Exception:
         return {}
 
 def _save_cfg(d: dict):
     try:
-        with open(_CFG, 'w', encoding='utf-8') as f:
+        tmp = _CFG + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(d, f, ensure_ascii=False, indent=2)
+        os.replace(tmp, _CFG)
     except Exception:
         pass
 
@@ -390,6 +397,7 @@ class _HotkeyServer:
         self._hwnd = hwnd
         self._ready.set()
         if not hwnd:
+            _u32.UnregisterClassW(cls_name, hInst)
             return
         msg = _wt.MSG()
         while True:
@@ -557,11 +565,17 @@ class SettingsDialog(ctk.CTkToplevel):
             try:
                 hk = keyboard.read_hotkey(suppress=False)
                 if hk.lower() != 'escape':
-                    self.after(0, lambda h=hk: var.set(h))
+                    try: self.after(0, lambda h=hk: var.set(h))
+                    except Exception: pass
             except Exception:
                 pass
-            self.after(0, lambda: btn.configure(
-                text='🎯 จับ', fg_color=C['card2'], state='normal'))
+            finally:
+                keyboard.unhook_all()
+            try:
+                self.after(0, lambda: btn.configure(
+                    text='🎯 จับ', fg_color=C['card2'], state='normal'))
+            except Exception:
+                pass
         threading.Thread(target=_do, daemon=True).start()
 
     # ── Max segments ───────────────────────────────────────────────────────────
@@ -734,6 +748,7 @@ class SpeechPanel(ctk.CTk):
         self._cfg          = _load_cfg()
         self._visible      = True
         self._recording    = False
+        self._stopping     = False
         self._rec_start    = 0.0
         self._audio_chunks = []
         self._stream       = None
@@ -1576,6 +1591,8 @@ class SpeechPanel(ctk.CTk):
         self._edge_tab_hover = hz
 
     def _quit_app(self):
+        self._recording = False
+        self._close_stream()
         if getattr(self, '_tray', None):
             try: self._tray.stop()
             except Exception: pass
@@ -1592,16 +1609,21 @@ class SpeechPanel(ctk.CTk):
     def _pump_hotkeys(self):
         """Drain hotkey event queue on the Tk main thread + watchdog."""
         try:
-            while True:
-                cb = self._hk_server.events.get_nowait()
-                try: cb()
-                except Exception: pass
-        except queue.Empty:
-            pass
-        if not self._hk_server.alive():
-            self._hk_server = _HotkeyServer()
-            self._register_hotkeys()
-        self.after(20, self._pump_hotkeys)
+            try:
+                while True:
+                    cb = self._hk_server.events.get_nowait()
+                    try: cb()
+                    except Exception: pass
+            except queue.Empty:
+                pass
+            if not self._hk_server.alive():
+                now = time.monotonic()
+                if now - getattr(self, '_hk_restart_t', 0) > 5.0:
+                    self._hk_restart_t = now
+                    self._hk_server = _HotkeyServer()
+                    self._register_hotkeys()
+        finally:
+            self.after(20, self._pump_hotkeys)
 
     def _register_hotkeys(self):
         pairs = [
@@ -1688,21 +1710,25 @@ class SpeechPanel(ctk.CTk):
             self.show_toast('หน้าต่างเป้าหมายถูกปิดแล้ว — เก็บลงการ์ดอย่างเดียว', 'info')
             return
         def _worker():
-            try: old = pyperclip.paste()
-            except Exception: old = None
-            if u.GetForegroundWindow() != target:
-                u.SetForegroundWindow(target)
-                time.sleep(0.25)
-            if u.GetForegroundWindow() != target:
-                self.after(0, lambda: self.show_toast(
-                    'สลับไปหน้าต่างเป้าหมายไม่ได้ — เก็บลงการ์ดอย่างเดียว', 'info'))
-                return
-            pyperclip.copy(text)
-            time.sleep(0.1)        # wait for clipboard to be ready
-            keyboard.send('ctrl+v')
-            time.sleep(0.45)       # wait for app to finish pasting before restoring
-            if old is not None:
-                pyperclip.copy(old)
+            old = None
+            try:
+                try: old = pyperclip.paste()
+                except Exception: old = None
+                if u.GetForegroundWindow() != target:
+                    u.SetForegroundWindow(target)
+                    time.sleep(0.25)
+                if u.GetForegroundWindow() != target:
+                    self.after(0, lambda: self.show_toast(
+                        'สลับไปหน้าต่างเป้าหมายไม่ได้ — เก็บลงการ์ดอย่างเดียว', 'info'))
+                    return
+                pyperclip.copy(text)
+                time.sleep(0.1)        # wait for clipboard to be ready
+                keyboard.send('ctrl+v')
+                time.sleep(0.45)       # wait for app to finish pasting before restoring
+            finally:
+                if old:                # skip restore if clipboard held image/file (empty string)
+                    try: pyperclip.copy(old)
+                    except Exception: pass
         threading.Thread(target=_worker, daemon=True).start()
 
     # ── Partial display ───────────────────────────────────────────────────────
@@ -1773,6 +1799,7 @@ class SpeechPanel(ctk.CTk):
         if self._replace_card and self._replace_sel:
             c, s, e_ = self._replace_card, *self._replace_sel
             def do():
+                if not c.winfo_exists(): return
                 c.replace_at(s, e_, text)
                 self._replace_card = None; self._replace_sel = None
                 self._update_combined(); self._set_status(f'✅ แทนที่ใน #{c.seg_id}')
@@ -1803,7 +1830,16 @@ class SpeechPanel(ctk.CTk):
 
     # ── Batch STT ─────────────────────────────────────────────────────────────
 
+    def _close_stream(self):
+        s, self._stream = self._stream, None
+        if s is not None:
+            try: s.abort()
+            except Exception: pass
+            try: s.close()
+            except Exception: pass
+
     def _start_free(self):
+        self._close_stream()   # never orphan a live stream
         def _cb(indata, frames, t, status):
             if self._recording:
                 self._audio_chunks.append(indata.copy())
@@ -1816,25 +1852,34 @@ class SpeechPanel(ctk.CTk):
         except Exception as e: self._rec_err(f'ไมค์: {e}')
 
     def _stop_free(self):
+        if self._stopping: return
+        self._stopping = True
         self._mic_btn.configure(fg_color=C['accent'], text='🎤')
         self._replace_hint.configure(text='')
         self._set_status('⏳ กำลังแปลงเสียง...')
         def _do_stop():
+            self._stopping = False
             self._recording = False          # stops _tick()
             self._hide_recording_indicator()
             self._timer_lbl.configure(text='')
             self._stop_level_meter()
             if self._auto_collapse and self._visible and not self._edge_tab_locked:
                 self._monitor_leave()
-            if self._stream: self._stream.stop(); self._stream.close(); self._stream = None
-            threading.Thread(target=self._transcribe_free, daemon=True).start()
+            self._close_stream()
+            chunks = list(self._audio_chunks)
+            threading.Thread(target=self._transcribe_free, args=(chunks,),
+                             daemon=True).start()
         self.after(400, _do_stop)
 
-    def _transcribe_free(self):
+    def _stt_err(self, msg):
+        """STT/transcription error — does NOT close stream or change recording state."""
+        self._set_status(f'⚠️ {msg}')
+
+    def _transcribe_free(self, chunks):
         try:
-            if not self._audio_chunks:
-                self.after(0, lambda: self._set_status('ไม่มีเสียง')); return
-            raw = np.concatenate(self._audio_chunks, axis=0)
+            if not chunks:
+                self.after(0, lambda: self._stt_err('ไม่มีเสียง')); return
+            raw = np.concatenate(chunks, axis=0)
             use_whisper = (self._cfg.get('stt_engine', 'google') == 'whisper'
                            and self._whisper)
             if use_whisper:
@@ -1856,10 +1901,10 @@ class SpeechPanel(ctk.CTk):
             if text:
                 self.after(0, lambda t=text: self._finish_text(t))
             else:
-                self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
-        except sr.UnknownValueError: self.after(0, lambda: self._rec_err('ฟังไม่ได้ยิน'))
-        except sr.RequestError:      self.after(0, lambda: self._rec_err('ไม่มีอินเทอร์เน็ต'))
-        except Exception as e:       self.after(0, lambda err=e: self._rec_err(str(err)[:50]))
+                self.after(0, lambda: self._stt_err('ฟังไม่ได้ยิน'))
+        except sr.UnknownValueError: self.after(0, lambda: self._stt_err('ฟังไม่ได้ยิน'))
+        except sr.RequestError:      self.after(0, lambda: self._stt_err('ไม่มีอินเทอร์เน็ต'))
+        except Exception as e:       self.after(0, lambda err=e: self._stt_err(str(err)[:50]))
 
     # ── Common ────────────────────────────────────────────────────────────────
 
@@ -1871,7 +1916,8 @@ class SpeechPanel(ctk.CTk):
 
     def _start_level_meter(self):
         self._level_canvas.pack(anchor='center', pady=(2, 0))
-        self._update_level_meter()
+        if not self._level_anim_job:
+            self._update_level_meter()
 
     def _stop_level_meter(self):
         if self._level_anim_job:
@@ -1902,9 +1948,11 @@ class SpeechPanel(ctk.CTk):
         self._level_anim_job = self.after(80, self._update_level_meter)
 
     def _rec_err(self, msg):
-        self._recording = False; self._replace_card = None
+        self._recording = False; self._stopping = False
+        self._replace_card = None; self._f9_target = None
+        self._close_stream()
+        self._stop_level_meter()
         self._hide_recording_indicator()
-        self._f9_target = None
         self._common_stop_ui()
         self._set_status(f'⚠️ {msg}')
 
@@ -1954,6 +2002,9 @@ class SpeechPanel(ctk.CTk):
         if self._max_segments > 0:
             while len(self._cards) >= self._max_segments:
                 oldest = self._cards.pop()
+                if oldest is self._active_card: self._active_card = None
+                if oldest is self._replace_card: self._replace_card = None
+                if self._ph_pending and self._ph_pending[0] is oldest: self._ph_pending = None
                 oldest.pack_forget(); oldest.destroy()
         self._seg_id += 1
         card = SegmentCard(self._seg_frame, text, self._seg_id,
@@ -2130,7 +2181,9 @@ class SpeechPanel(ctk.CTk):
         if not self._cards: return
         count = len(self._cards)
         for c in self._cards[:]: c.destroy()
-        self._cards.clear(); self._update_combined()
+        self._cards.clear()
+        self._active_card = None; self._replace_card = None; self._ph_pending = None
+        self._update_combined()
         self._empty_lbl.pack(pady=30); self._set_status('ล้างแล้ว')
         self.show_toast(f'🗑 ล้างแล้ว {count} กล่อง', 'error')
 
@@ -2176,6 +2229,12 @@ class SpeechPanel(ctk.CTk):
 
 
 if __name__ == '__main__':
+    import faulthandler
+    _fault_log = os.path.join(_BASE, 'native_crash.log')
+    try:
+        faulthandler.enable(open(_fault_log, 'a', encoding='utf-8'))
+    except Exception:
+        pass
     _ensure_single_instance()
     _setup_crash_handler()
     try:
