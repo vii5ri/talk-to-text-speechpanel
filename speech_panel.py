@@ -91,7 +91,7 @@ _BASE = os.path.dirname(os.path.abspath(
 _CFG       = os.path.join(_BASE, 'speech_panel_config.json')
 _ICON_FILE = os.path.join(_BASE, 'speech_panel.ico')
 _LOG_FILE  = os.path.join(_BASE, 'speech_panel_crash.log')
-VERSION    = '2.0'
+VERSION    = '2.0.1'
 
 # ── Single-instance guard ──────────────────────────────────────────────────────
 _MUTEX_NAME = 'SpeechPanel_SingleInstance_v2'
@@ -499,8 +499,12 @@ class SettingsDialog(ctk.CTkToplevel):
         return f
 
     def _build(self):
-        ctk.CTkLabel(self, text='⚙️ ตั้งค่า', font=_f(16,'bold'),
-                     text_color=C['text']).pack(pady=(14,6))
+        hdr = ctk.CTkFrame(self, fg_color='transparent')
+        hdr.pack(fill='x', padx=14, pady=(14, 4))
+        ctk.CTkLabel(hdr, text='⚙️ ตั้งค่า', font=_f(16,'bold'),
+                     text_color=C['text']).pack(side='left')
+        ctk.CTkLabel(hdr, text=f'v{VERSION}', font=_f(11),
+                     text_color=C['sub']).pack(side='right', anchor='s', pady=(0,2))
         scroll = ctk.CTkScrollableFrame(self, fg_color='transparent')
         scroll.pack(fill='both', expand=True, padx=14, pady=(0,6))
         self._build_api(scroll)
