@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>SpeechPanel คู่มือ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #f8f7f4;
+    --bg2: #eeece8;
+    --surface: #ffffff;
+    --border: #ddd9d3;
+    --accent: #e85d04;
+    --accent2: #f48c06;
+    --hero-bg: #0a0f1a;
+    --hero-text: #f1f5f9;
+    --text: #1c1917;
+    --sub: #57534e;
+    --code-bg: #1e1e2e;
+    --code-text: #cdd6f4;
+    --nav-w: 240px;
+    --radius: 10px;
+    --shadow: 0 2px 12px rgba(0,0,0,.08);
+  }
+  [data-theme="dark"] {
+    --bg: #0f172a;
+    --bg2: #1e293b;
+    --surface: #1e293b;
+    --border: #334155;
+    --text: #f1f5f9;
+    --sub: #94a3b8;
+    --shadow: 0 2px 12px rgba(0,0,0,.4);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0f172a; --bg2: #1e293b; --surface: #1e293b;
+      --border: #334155; --text: #f1f5f9; --sub: #94a3b8;
+      --shadow: 0 2px 12px rgba(0,0,0,.4);
+    }
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body { font-family: 'Sarabun', sans-serif; background: var(--bg); color: var(--text);
+         line-height: 1.75; font-size: 16px; }
+
+  /* ── Layout ── */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: var(--nav-w); flex-shrink: 0; background: var(--hero-bg);
+             color: #e2e8f0; position: sticky; top: 0; height: 100vh;
+             overflow-y: auto; display: flex; flex-direction: column; }
+  .main { flex: 1; max-width: 900px; padding: 40px 32px 80px; }
+
+  /* ── Sidebar ── */
+  .sidebar-brand { padding: 24px 20px 12px; border-bottom: 1px solid #1e293b; }
+  .sidebar-brand h2 { font-size: 15px; font-weight: 700; color: #f1f5f9; }
+  .sidebar-brand span { font-size: 11px; color: #64748b; }
+  .sidebar nav { flex: 1; padding: 12px 0; }
+  .sidebar nav a { display: block; padding: 7px 20px; font-size: 13px; color: #94a3b8;
+                   text-decoration: none; border-left: 2px solid transparent; transition: .15s; }
+  .sidebar nav a:hover, .sidebar nav a.active {
+    color: #f1f5f9; border-color: var(--accent); background: rgba(232,93,4,.08); }
+  .sidebar nav .nav-section { font-size: 10px; font-weight: 600; letter-spacing: .08em;
+    text-transform: uppercase; color: #475569; padding: 14px 20px 4px; }
+  .sidebar-footer { padding: 12px 20px; border-top: 1px solid #1e293b; font-size: 11px; color: #475569; }
+
+  /* ── Theme toggle ── */
+  #theme-btn { position: fixed; top: 14px; right: 16px; z-index: 999;
+               background: var(--surface); border: 1px solid var(--border);
+               border-radius: 50%; width: 38px; height: 38px; font-size: 16px;
+               cursor: pointer; box-shadow: var(--shadow); color: var(--text);
+               display: flex; align-items: center; justify-content: center; }
+
+  /* ── Hero ── */
+  .hero { background: var(--hero-bg); color: var(--hero-text); border-radius: var(--radius);
+          padding: 36px 32px; margin-bottom: 36px; }
+  .hero h1 { font-size: 28px; font-weight: 700; margin-bottom: 8px; }
+  .hero p { color: #94a3b8; font-size: 15px; line-height: 1.6; }
+  .hero-badges { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+  .badge { background: rgba(232,93,4,.15); color: var(--accent2); font-size: 12px;
+           font-weight: 600; padding: 3px 10px; border-radius: 20px; border: 1px solid rgba(232,93,4,.2); }
+
+  /* ── Sections ── */
+  section { margin-bottom: 52px; }
+  h2.sec-title { font-size: 22px; font-weight: 700; color: var(--text);
+                 border-left: 4px solid var(--accent); padding-left: 14px;
+                 margin-bottom: 20px; }
+  h3 { font-size: 17px; font-weight: 600; color: var(--text); margin: 20px 0 10px; }
+  p { margin-bottom: 12px; color: var(--text); }
+  ul, ol { padding-left: 22px; margin-bottom: 12px; }
+  li { margin-bottom: 4px; }
+
+  /* ── Card ── */
+  .card { background: var(--surface); border: 1px solid var(--border);
+          border-radius: var(--radius); padding: 20px 24px; margin-bottom: 16px;
+          box-shadow: var(--shadow); }
+
+  /* ── Code ── */
+  code { font-family: 'Consolas', 'Courier New', monospace; font-size: 13px;
+         background: var(--code-bg); color: var(--code-text);
+         padding: 2px 6px; border-radius: 4px; }
+  pre { background: var(--code-bg); color: var(--code-text);
+        border-radius: var(--radius); padding: 18px 20px; margin: 12px 0;
+        overflow-x: auto; font-size: 13px; line-height: 1.6;
+        border-left: 3px solid var(--accent); }
+  pre code { background: none; padding: 0; }
+
+  /* ── Table ── */
+  .tbl-wrap { overflow-x: auto; margin: 12px 0 20px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { background: var(--hero-bg); color: var(--hero-text); font-weight: 600;
+       text-align: left; padding: 10px 14px; }
+  td { padding: 9px 14px; border-bottom: 1px solid var(--border); color: var(--text); }
+  tr:last-child td { border-bottom: none; }
+  tr:nth-child(even) td { background: var(--bg2); }
+
+  /* ── Key chips ── */
+  kbd { display: inline-block; background: var(--bg2); border: 1px solid var(--border);
+        border-radius: 5px; padding: 2px 8px; font-size: 12px; font-family: monospace;
+        box-shadow: 0 1px 0 var(--border); color: var(--text); }
+
+  /* ── Alert ── */
+  .alert { border-radius: var(--radius); padding: 14px 18px; margin: 14px 0; font-size: 14px; }
+  .alert-warn { background: rgba(232,93,4,.08); border: 1px solid rgba(232,93,4,.25); color: var(--text); }
+  .alert-info { background: rgba(59,130,246,.08); border: 1px solid rgba(59,130,246,.25); color: var(--text); }
+  .alert-ok   { background: rgba(22,163,74,.08);  border: 1px solid rgba(22,163,74,.25);  color: var(--text); }
+
+  /* ── Feature grid ── */
+  .feat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; margin: 14px 0; }
+  .feat-card { background: var(--surface); border: 1px solid var(--border);
+               border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); }
+  .feat-card .icon { font-size: 22px; margin-bottom: 6px; }
+  .feat-card h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .feat-card p { font-size: 13px; color: var(--sub); margin: 0; }
+
+  /* ── Version badge ── */
+  .version-tag { display: inline-block; background: var(--accent); color: #fff;
+                 font-size: 12px; font-weight: 700; padding: 3px 10px;
+                 border-radius: 20px; margin-left: 8px; vertical-align: middle; }
+
+  /* ── Step list ── */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li { counter-increment: step; display: flex; gap: 14px; margin-bottom: 16px; align-items: flex-start; }
+  .steps li::before { content: counter(step); background: var(--accent); color: #fff;
+                      font-weight: 700; font-size: 13px; min-width: 26px; height: 26px;
+                      border-radius: 50%; display: flex; align-items: center;
+                      justify-content: center; flex-shrink: 0; margin-top: 2px; }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .sidebar { display: none; }
+    .main { padding: 24px 16px 60px; }
+    .hero { padding: 24px 20px; }
+    .hero h1 { font-size: 22px; }
+    .feat-grid { grid-template-columns: 1fr 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<button id="theme-btn" aria-label="สลับธีม" title="สลับธีม">🌙</button>
+
+<div class="layout">
+  <!-- ───── Sidebar ───── -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h2>🎤 SpeechPanel</h2>
+      <span>คู่มือผู้ใช้ v2.0.1</span>
+    </div>
+    <nav>
+      <div class="nav-section">เริ่มต้น</div>
+      <a href="#overview">ภาพรวมโครงการ</a>
+      <a href="#architecture">สถาปัตยกรรม</a>
+
+      <div class="nav-section">ฟีเจอร์</div>
+      <a href="#features">ฟีเจอร์และฟังก์ชัน</a>
+      <a href="#hotkeys">ปุ่มคีย์ลัด</a>
+      <a href="#stt-modes">โหมด STT</a>
+
+      <div class="nav-section">ตั้งค่า</div>
+      <a href="#config">การตั้งค่า</a>
+      <a href="#vocab">คำศัพท์ Vocab</a>
+      <a href="#api-keys">API Keys</a>
+
+      <div class="nav-section">อ้างอิง</div>
+      <a href="#scripts">Scripts & ไฟล์</a>
+      <a href="#filemap">แผนผังไฟล์</a>
+      <a href="#status">สถานะปัจจุบัน</a>
+
+      <div class="nav-section">ความช่วยเหลือ</div>
+      <a href="#howto">วิธีใช้ทีละขั้นตอน</a>
+      <a href="#troubleshoot">แก้ปัญหา</a>
+      <a href="#roadmap">Roadmap</a>
+    </nav>
+    <div class="sidebar-footer">อัปเดต: 2026-10-07</div>
+  </aside>
+
+  <!-- ───── Main content ───── -->
+  <main class="main">
+
+    <!-- Hero -->
+    <div class="hero">
+      <h1>🎤 SpeechPanel <span class="version-tag">v2.0.1</span></h1>
+      <p>โปรแกรมแปลงเสียงเป็นข้อความภาษาไทย / อังกฤษ แบบ Real-time<br>
+         รองรับ 4 เอนจิ้น · คีย์ลัดทำงานตลอดเวลา · AI Polish ด้วย Groq</p>
+      <div class="hero-badges">
+        <span class="badge">Windows 10/11</span>
+        <span class="badge">Python 3.11+</span>
+        <span class="badge">Tkinter / CustomTkinter</span>
+        <span class="badge">RegisterHotKey Win32</span>
+        <span class="badge">Groq API (ฟรี)</span>
+        <span class="badge">Google STT / Whisper / Vosk / Cloud</span>
+      </div>
+    </div>
+
+    <!-- ─────────────────── OVERVIEW ─────────────────── -->
+    <section id="overview">
+      <h2 class="sec-title">ภาพรวมโครงการ</h2>
+      <p>SpeechPanel คือแผงควบคุมถอดเสียงภาษาไทย/อังกฤษสำหรับ Windows ที่ออกแบบมาให้ใช้งานได้ <strong>โดยไม่ต้องย้ายหน้าจอ</strong> — ซ่อนตัวเป็น Edge Tab เล็ก ๆ ข้างหน้าจอ สามารถเรียกออกมาด้วยคีย์ลัดได้ทันทีแม้อยู่ในเกมหรือแอปอื่น</p>
+
+      <div class="feat-grid">
+        <div class="feat-card"><div class="icon">🎙️</div><h4>อัดเสียงพร้อมแสดงผล</h4><p>แปลงเสียงเป็นการ์ดข้อความแต่ละชิ้น แก้ไขได้ทันที</p></div>
+        <div class="feat-card"><div class="icon">⌨️</div><h4>Dictate ใส่แอปอื่น</h4><p>กด F9 พูดแล้วข้อความถูกวางลงในแอปที่ใช้งานอยู่</p></div>
+        <div class="feat-card"><div class="icon">✨</div><h4>AI Polish</h4><p>Groq LLM ตัดคำสร้อย จัดประโยคให้เรียบร้อยโดยอัตโนมัติ</p></div>
+        <div class="feat-card"><div class="icon">📚</div><h4>Vocab Tabs</h4><p>แก้คำถอดผิดอัตโนมัติ เช่น "ขอโค้ด" → "Claude Code"</p></div>
+        <div class="feat-card"><div class="icon">🔒</div><h4>Edge Tab Collapse</h4><p>ย่อเป็นแถบบาง ๆ ขอบหน้าจอ Auto-expand เมื่อ Hover</p></div>
+        <div class="feat-card"><div class="icon">🛡️</div><h4>Crash-safe</h4><p>Atomic config save, faulthandler, _stopping flag ป้องกัน double-stop</p></div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── ARCHITECTURE ─────────────────── -->
+    <section id="architecture">
+      <h2 class="sec-title">สถาปัตยกรรม</h2>
+
+      <h3>Stack เทคโนโลยี</h3>
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>ชั้น</th><th>เทคโนโลยี</th><th>หน้าที่</th></tr>
+          <tr><td>UI</td><td>CustomTkinter + Tkinter</td><td>หน้าต่างหลัก, การ์ด, Dialog, Edge Tab</td></tr>
+          <tr><td>Hotkey</td><td>Win32 RegisterHotKey (x64)</td><td>คีย์ลัดทำงานแม้โปรแกรมไม่ได้โฟกัส</td></tr>
+          <tr><td>Audio</td><td>sounddevice + numpy</td><td>รับเสียงจากไมโครโฟน 16kHz mono</td></tr>
+          <tr><td>STT Free</td><td>speech_recognition (Google)</td><td>ถอดเสียงออนไลน์ฟรี</td></tr>
+          <tr><td>STT Whisper</td><td>faster-whisper</td><td>ถอดเสียงออฟไลน์ คุณภาพสูง</td></tr>
+          <tr><td>STT Cloud</td><td>google-cloud-speech</td><td>Google Cloud STT real-time</td></tr>
+          <tr><td>AI Polish</td><td>Groq API (llama-3.1-8b-instant)</td><td>ปรับปรุงข้อความหลังถอด</td></tr>
+          <tr><td>Vocab</td><td>Regex replace engine</td><td>แก้คำผิดอัตโนมัติแบบ longest-match</td></tr>
+          <tr><td>Clipboard</td><td>pyperclip + keyboard</td><td>วาง / คืนค่า clipboard</td></tr>
+          <tr><td>Tray</td><td>pystray + Pillow</td><td>ไอคอน System Tray</td></tr>
+        </table>
+      </div>
+
+      <h3>โครงสร้าง Thread</h3>
+      <div class="card">
+        <pre><code>Main Thread (Tkinter)
+  ├── _pump_hotkeys()  ← polling every 20ms
+  ├── _heartbeat()     ← logging every 5 min
+  └── UI event loop
+
+HotkeyServer Thread  (Message-only Win32 window)
+  ├── GetMessageW loop
+  ├── RegisterHotKey / UnregisterHotKey  (owner-thread only)
+  └── events.put(cb)  →  Tk thread drains via SimpleQueue
+
+Audio / STT Thread  (daemon)
+  ├── sounddevice InputStream callback  →  _audio_chunk[]
+  └── STT engine  →  self.after(0, _finish_text)
+
+Polish Thread  (daemon, per-request)
+  └── POST Groq API  →  self.after(0, _apply_polish)</code></pre>
+      </div>
+
+      <h3>RegisterHotKey (x64) — ทำไมถึงใช้แทน keyboard hook?</h3>
+      <p>ไลบรารี <code>keyboard</code> ใช้ <code>WH_KEYBOARD_LL</code> hook ซึ่งต้องการให้โปรแกรมมี message pump ที่รวดเร็วพอ แต่เมื่อโปรแกรมถูก minimize หรือถูก Windows throttle, hook จะหยุดรับ event</p>
+      <p><strong>RegisterHotKey</strong> เป็น kernel-level API ที่ส่ง <code>WM_HOTKEY</code> ตรงไปยัง window message queue โดยไม่สนใจสถานะโฟกัส — hotkey จึงทำงานได้แม้ขณะเล่นเกม, ดูหนัง, หรือ minimize โปรแกรม</p>
+      <div class="alert alert-warn">
+        ⚠️ <strong>ข้อจำกัด:</strong> RegisterHotKey ต้องเรียกจาก thread ที่เป็นเจ้าของ window เท่านั้น — โค้ดจึงใช้ <code>SendMessageW</code> เพื่อ marshal call ข้าม thread ก่อนเสมอ
+      </div>
+
+      <h3>Hotkey Watchdog</h3>
+      <p>ทุก 20ms <code>_pump_hotkeys()</code> ตรวจสอบว่า <code>_HotkeyServer</code> ยังมีชีวิตอยู่หรือไม่ ถ้า thread ตายจะสร้าง server ใหม่อัตโนมัติ (cooldown 5 วินาที)</p>
+    </section>
+
+    <!-- ─────────────────── FEATURES ─────────────────── -->
+    <section id="features">
+      <h2 class="sec-title">ฟีเจอร์และฟังก์ชัน</h2>
+
+      <h3>การ์ดข้อความ (Segment Cards)</h3>
+      <p>แต่ละครั้งที่อัดเสียงจะสร้างการ์ดใหม่ การ์ดมีฟีเจอร์ดังนี้:</p>
+      <ul>
+        <li>คลิกการ์ด = copy ข้อความทั้งใบไปยัง clipboard</li>
+        <li>แก้ไขข้อความโดยตรงภายในการ์ด</li>
+        <li>ปุ่ม <kbd>✨</kbd> = AI Polish (Groq)</li>
+        <li>ปุ่ม <kbd>↑</kbd> <kbd>↓</kbd> = เรียงลำดับการ์ด</li>
+        <li>ปุ่ม <kbd>🗑</kbd> = ลบการ์ด</li>
+        <li>Checkbox = เลือกหลายการ์ดพร้อมกัน แล้ว copy รวม</li>
+      </ul>
+
+      <h3>แถบรวม (Combined Bar)</h3>
+      <p>แสดงข้อความจากทุกการ์ดที่มีอยู่ต่อกันในแถบด้านล่าง กดเพื่อ copy ทั้งหมดด้วยคลิกเดียว</p>
+
+      <h3>AI Polish (Groq)</h3>
+      <div class="card">
+        <p>ส่งข้อความไปยัง <strong>Groq API</strong> (llama-3.1-8b-instant) พร้อม prompt ที่สั่ง:</p>
+        <ol>
+          <li>ลบคำสร้อย เช่น "เอ่อ" "อ่า" "อืม" "แบบว่า"</li>
+          <li>เก็บเฉพาะเวอร์ชันล่าสุดเมื่อพูดผิดกลางประโยค</li>
+          <li>จัดประโยคให้อ่านง่าย แต่ห้ามเพิ่มเนื้อหาใหม่</li>
+        </ol>
+        <p>ผลลัพธ์ถูก copy ไปยัง clipboard ทันที</p>
+      </div>
+
+      <h3>F9 Direct Dictation</h3>
+      <div class="card">
+        <ol class="steps">
+          <li>กด <kbd>F9</kbd> ขณะโฟกัสอยู่ที่แอปเป้าหมาย (Word, browser, Discord ฯลฯ)</li>
+          <li>โปรแกรมจดจำ window handle ของแอปนั้น เริ่มอัดเสียง</li>
+          <li>กด <kbd>F9</kbd> อีกครั้ง → หยุดอัด</li>
+          <li>ข้อความถูก paste เข้าแอปเดิมอัตโนมัติผ่าน <code>Ctrl+V</code></li>
+        </ol>
+        <div class="alert alert-info">💡 clipboard เดิมจะถูกเก็บและคืนค่ากลับหลัง paste เสร็จ</div>
+      </div>
+
+      <h3>Edge Tab (ย่อเป็นแถบ)</h3>
+      <p>เมื่อกด <kbd>F8</kbd> หรือคลิกปุ่ม collapse หน้าต่างจะซ่อนและแสดงแถบบาง ๆ ที่ขอบหน้าจอ:</p>
+      <ul>
+        <li>ลูกศร (ขยาย) + ไอคอน 🔒/🔓 (Auto-expand on/off)</li>
+        <li>เมื่อ 🔓: วาง mouse เหนือแถบ 350ms → ขยายอัตโนมัติ</li>
+        <li>เมื่ออัดเสียงอยู่: แถบสีเขียวจะแสดงที่ด้านบนของ edge tab</li>
+        <li>Hover zone ขยาย ±150px รอบแถบเพื่อรับ mouse events ได้ง่ายขึ้น</li>
+      </ul>
+
+      <h3>แถบรวม (Combined Bar)</h3>
+      <p>แถบสีเข้มที่ด้านล่างสุดของแผงซ้าย รวมข้อความจากทุกการ์ดต่อกัน:</p>
+      <ul>
+        <li>คลิกแถบรวม = copy ข้อความทั้งหมดทุกการ์ดด้วยคลิกเดียว</li>
+        <li>ข้อความภาษาไทยต่อกันโดยไม่มี space / ภาษาอังกฤษมี space คั่น</li>
+        <li>อัปเดตอัตโนมัติทุกครั้งที่เพิ่มหรือแก้ไขการ์ด</li>
+      </ul>
+
+      <h3>เลือกหลายการ์ดพร้อมกัน</h3>
+      <ul>
+        <li>ติ๊ก Checkbox ที่มุมซ้ายบนของแต่ละการ์ดเพื่อเลือก</li>
+        <li>กดปุ่ม <kbd>📋 Copy ที่เลือก</kbd> ที่ toolbar ด้านบน → copy เฉพาะการ์ดที่ติ๊กไว้ต่อกัน</li>
+        <li>ใช้เมื่อต้องการรวมเฉพาะบางช่วงของการบันทึก</li>
+      </ul>
+
+      <h3>Level Meter (แถบวัดเสียง)</h3>
+      <ul>
+        <li>แถบสีแสดงระดับเสียงไมโครโฟน real-time ขณะอัดเสียง</li>
+        <li>ช่วยตรวจสอบว่าไมโครโฟนรับเสียงได้หรือไม่ก่อนพูด</li>
+        <li>ถ้าแถบไม่ขยับเลย = ไมโครโฟนไม่ทำงาน ให้ตรวจ Windows Sound Settings</li>
+      </ul>
+
+      <h3>System Tray</h3>
+      <p>เมื่อโปรแกรมเปิดอยู่จะมีไอคอน 🎤 ที่ System Tray (มุมขวาล่างของ taskbar):</p>
+      <ul>
+        <li>คลิกขวา → <strong>แสดง/ซ่อน</strong> — เรียกหน้าต่างกลับมา</li>
+        <li>คลิกขวา → <strong>วิธีใช้</strong> — แสดงสรุปคีย์ลัด</li>
+        <li>คลิกขวา → <strong>ออกจากโปรแกรม</strong> — ปิดโปรแกรมสมบูรณ์</li>
+        <li>ดับเบิลคลิกไอคอน = แสดง/ซ่อนหน้าต่างทันที</li>
+      </ul>
+
+      <h3>AI Chat Launcher</h3>
+      <p>แถบด้านบนของแผงมีปุ่มเปิด AI Chatbot ต่าง ๆ โดยตรง:</p>
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>AI</th><th>URL ที่เปิด</th></tr>
+          <tr><td>ChatGPT</td><td>chat.openai.com</td></tr>
+          <tr><td>Gemini</td><td>gemini.google.com</td></tr>
+          <tr><td>Claude</td><td>claude.ai</td></tr>
+          <tr><td>Perplexity</td><td>perplexity.ai</td></tr>
+          <tr><td>Grok</td><td>x.com/i/grok</td></tr>
+          <tr><td>Meta AI</td><td>meta.ai</td></tr>
+          <tr><td>Manus</td><td>manus.im</td></tr>
+        </table>
+      </div>
+      <p>วิธีใช้: พูดข้อความในโปรแกรม → copy → เปิด AI ที่ต้องการ → Paste</p>
+
+      <h3>Vocab Placeholder Tokens (ABC / ABC1 / ABC2)</h3>
+      <div class="card">
+        <p>เมื่อเพิ่มคำใน Vocab โดยเว้นช่อง "คำที่ถอดผิด" ว่าง คำนั้นจะกลายเป็น <strong>Placeholder Token</strong> ที่คลิกได้ในการ์ด:</p>
+        <ol class="steps">
+          <li>พูดข้อความที่มีคำ placeholder เช่น "ABC" หรือ "ABC 1"</li>
+          <li>STT ถอดออกมาแล้ว token นั้นจะมีปุ่มสีน้ำเงินคลิกได้ในการ์ด</li>
+          <li>คลิก token ในการ์ด → token ถูก "เลือก" (highlight)</li>
+          <li>คลิกคำใน Vocab list ด้านขวา → แทนที่ token ด้วยคำนั้นทุกจุดในการ์ด</li>
+        </ol>
+        <div class="alert alert-info">💡 ใช้สำหรับคำที่ไม่แน่ใจตอนพูด เช่น ชื่อโปรแกรม ชื่อคน — พูด "ABC" แล้วแทนทีหลัง</div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── HOTKEYS ─────────────────── -->
+    <section id="hotkeys">
+      <h2 class="sec-title">ปุ่มคีย์ลัด</h2>
+
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>คีย์</th><th>ฟังก์ชัน</th><th>หมายเหตุ</th></tr>
+          <tr><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Space</kbd></td><td>แสดง / ซ่อน panel</td><td>ค่าเริ่มต้น — เปลี่ยนได้ใน ⚙️</td></tr>
+          <tr><td><kbd>F8</kbd></td><td>ย่อ / ขยาย panel (Edge Tab)</td><td>Toggle collapse ↔ expand</td></tr>
+          <tr><td><kbd>F9</kbd></td><td>พูดแล้วพิมพ์ใส่แอปอื่น</td><td>กดครั้งแรก = เริ่มอัด, กดอีก = หยุด+paste</td></tr>
+          <tr><td><kbd>F10</kbd></td><td>เริ่ม / หยุด อัดเสียง</td><td>ผลลัพธ์ลงการ์ดในแผง</td></tr>
+        </table>
+      </div>
+
+      <div class="alert alert-ok">
+        ✅ คีย์ลัดทั้งหมดใช้ <strong>Win32 RegisterHotKey</strong> — ทำงานได้แม้โปรแกรมถูก minimize หรืออยู่ในเกม
+      </div>
+      <div class="alert alert-info">
+        💡 <strong>คีย์ลัดทุกปุ่มเปลี่ยนได้</strong> — ไม่ชอบ F9/F10/F8 กด ⚙️ แล้วตั้งปุ่มที่ต้องการได้เลย
+      </div>
+
+      <h3>เปลี่ยนคีย์ลัด (ทำได้ทันที)</h3>
+      <ol class="steps">
+        <li>กด <kbd>⚙️</kbd> (Settings) ที่มุมขวาบนของโปรแกรม</li>
+        <li>ส่วน <strong>⌨️ ปุ่มคีย์ลัด</strong> — มีปุ่ม <kbd>🎯 จับ</kbd> ทุกฟังก์ชัน</li>
+        <li>กด <kbd>🎯 จับ</kbd> ที่ฟังก์ชันที่ต้องการเปลี่ยน</li>
+        <li>กดปุ่มที่ต้องการบน keyboard (เช่น <kbd>F2</kbd>, <kbd>Ctrl+F1</kbd>)</li>
+        <li>กด <kbd>💾 บันทึกทั้งหมด</kbd> → คีย์ลัดใหม่ใช้งานได้ทันที</li>
+      </ol>
+      <div class="alert alert-warn">
+        ⚠️ ถ้าคีย์ที่เลือกขัดแย้งกับเกมหรือแอปอื่น → เปลี่ยนเป็นปุ่มที่ไม่ถูกใช้ เช่น <kbd>F2</kbd>, <kbd>F3</kbd>, <kbd>Pause</kbd>
+      </div>
+    </section>
+
+    <!-- ─────────────────── STT MODES ─────────────────── -->
+    <section id="stt-modes">
+      <h2 class="sec-title">โหมด STT (Speech-to-Text)</h2>
+
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>โหมด</th><th>เอนจิ้น</th><th>ออฟไลน์</th><th>คุณภาพ</th><th>ต้องตั้งค่า</th></tr>
+          <tr><td>🌐 Free</td><td>Google STT (ฟรี)</td><td>❌</td><td>ดี</td><td>ไม่ต้อง</td></tr>
+          <tr><td>🤖 Whisper</td><td>faster-whisper (large-v3)</td><td>✅</td><td>ยอดเยี่ยม</td><td>โหลด model ~3GB</td></tr>
+          <tr><td>🔌 Vosk</td><td>Vosk offline</td><td>✅</td><td>ดี (real-time)</td><td>โหลด model แยก</td></tr>
+          <tr><td>☁️ Cloud</td><td>Google Cloud STT</td><td>❌</td><td>ยอดเยี่ยม</td><td>Service Account JSON</td></tr>
+        </table>
+      </div>
+
+      <h3>Whisper Model</h3>
+      <div class="card">
+        <p>ค่าเริ่มต้นใช้ <code>large-v3</code> (~3GB VRAM) คุณภาพดีที่สุดสำหรับภาษาไทย</p>
+        <p>เปลี่ยน model size ได้ในโค้ด: <code>speech_panel.py</code> บรรทัด 52</p>
+        <pre><code>WHISPER_MODEL_SIZE = 'large-v3'   # ตัวเลือก: tiny, base, small, medium, large-v3</code></pre>
+        <p>Model จะถูกโหลดครั้งแรกเมื่อเลือกโหมด Whisper และ cache ไว้ในหน่วยความจำ</p>
+      </div>
+
+      <h3>Google Cloud STT</h3>
+      <ol class="steps">
+        <li>สร้าง Service Account ใน Google Cloud Console</li>
+        <li>ดาวน์โหลด JSON credentials file</li>
+        <li>เปิด ⚙️ → เลือกไฟล์ JSON</li>
+        <li>หรือรัน: <code>gcloud auth application-default login</code></li>
+      </ol>
+    </section>
+
+    <!-- ─────────────────── CONFIG ─────────────────── -->
+    <section id="config">
+      <h2 class="sec-title">การตั้งค่า</h2>
+
+      <h3>ไฟล์ <code>speech_panel_config.json</code></h3>
+      <p>โปรแกรมบันทึกการตั้งค่าทั้งหมดใน JSON file นี้ อัปเดต atomic (เขียน .tmp แล้ว replace) เพื่อป้องกันไฟล์เสียหายเมื่อโปรแกรมปิดกะทันหัน</p>
+
+      <div class="card">
+        <pre><code>{
+  "mode":             "free",            // โหมด STT: free | whisper | vosk | gcloud
+  "stt_engine":       "google",          // เอนจิ้นภายใน
+  "auto_collapse":    false,             // ย่อ panel อัตโนมัติเมื่อเปิดโปรแกรม
+  "auto_expand":      false,             // ขยาย panel เมื่อ hover edge tab
+  "locked":           true,              // ล็อคตำแหน่ง panel
+  "hotkey_toggle":    "ctrl+shift+space",
+  "hotkey_collapse":  "f8",
+  "hotkey_record":    "f10",
+  "hotkey_dictate":   "f9",
+  "gemini_api_key":   "gsk_...",         // Groq API Key (ชื่อ field เดิมจาก Gemini era)
+  "max_segments":     20,                // 0 = ไม่จำกัด
+  "vocab_tabs": {
+    "1": [ {"wrong": "", "right": "GitHub"} ],
+    "2": [ {"wrong": "ขอโค้ด", "right": "Claude Code"} ],
+    "3": []
+  },
+  "vocab_active_tab": "1"
+}</code></pre>
+      </div>
+
+      <div class="alert alert-warn">
+        ⚠️ ถ้าไฟล์ config เสียหาย (JSON ไม่ valid) โปรแกรมจะสำรองไฟล์เดิมเป็น <code>.corrupt</code> และเริ่มด้วยค่าเริ่มต้น
+      </div>
+    </section>
+
+    <!-- ─────────────────── VOCAB ─────────────────── -->
+    <section id="vocab">
+      <h2 class="sec-title">คำศัพท์ Vocab Tabs</h2>
+
+      <p>แผง Vocab (ฝั่งขวา) มี 3 แท็บ แต่ละแท็บเก็บรายการคู่ <em>คำผิด → คำที่ถูก</em></p>
+
+      <h3>วิธีการทำงาน</h3>
+      <div class="card">
+        <ul>
+          <li><strong>Longest-match first:</strong> คำที่ยาวกว่าจะถูกเปรียบเทียบก่อน ป้องกัน false match</li>
+          <li><strong>Space-tolerant:</strong> STT มักแยก "123" เป็น "1 2 3" — regex จับ whitespace ระหว่างตัวอักษรได้</li>
+          <li><strong>Case-insensitive:</strong> ตัวพิมพ์ใหญ่/เล็กไม่สำคัญ</li>
+          <li>ถ้าช่อง "คำที่ถอดผิด" ว่างเปล่า = เพิ่มคำในรายการเสนอแนะ (placeholder ที่คลิกได้)</li>
+        </ul>
+      </div>
+
+      <h3>เพิ่มคำใหม่</h3>
+      <ol class="steps">
+        <li>คลิกปุ่ม <kbd>+ เพิ่มคำ</kbd> ในแผง Vocab</li>
+        <li>ช่อง "คำที่ถอดผิด" — ใส่คำที่ STT มักเข้าใจผิด (เว้นว่างได้)</li>
+        <li>ช่อง "คำที่ถูกต้อง" — ใส่คำที่ต้องการแทน</li>
+        <li>กด บันทึก</li>
+      </ol>
+
+      <h3>ตัวอย่าง Vocab ที่มีอยู่</h3>
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>คำผิด (STT)</th><th>คำที่ถูกต้อง</th></tr>
+          <tr><td>ขอโค้ด</td><td>Claude Code</td></tr>
+          <tr><td>กฤษครับ</td><td>GitHub</td></tr>
+          <tr><td>คอร์ด close / คอร์ดโค้ด</td><td>Claude Code</td></tr>
+          <tr><td>กรีดพัด</td><td>GitHub</td></tr>
+          <tr><td>หรือไม่</td><td>?</td></tr>
+          <tr><td>(ว่าง)</td><td>GitHub, Claude Code, Anthropic, Etsy…</td></tr>
+        </table>
+      </div>
+    </section>
+
+    <!-- ─────────────────── API KEYS ─────────────────── -->
+    <section id="api-keys">
+      <h2 class="sec-title">API Keys</h2>
+
+      <h3>Groq API Key (AI Polish)</h3>
+      <div class="card">
+        <ol class="steps">
+          <li>ไปที่ <strong>console.groq.com</strong> → สมัคร / Login</li>
+          <li>เมนูซ้าย → <strong>API Keys</strong> → <strong>Create API Key</strong></li>
+          <li>Copy key (เริ่มด้วย <code>gsk_</code>)</li>
+          <li>เปิด ⚙️ → ส่วน <strong>🔑 Groq API Key</strong> → วาง → บันทึก</li>
+        </ol>
+        <div class="tbl-wrap">
+          <table>
+            <tr><th>ข้อจำกัด Free Tier</th><th>ค่า</th></tr>
+            <tr><td>Request/นาที</td><td>30</td></tr>
+            <tr><td>Request/วัน</td><td>14,400</td></tr>
+            <tr><td>ต้องใส่บัตรเครดิต</td><td>ไม่ต้อง</td></tr>
+          </table>
+        </div>
+      </div>
+
+      <h3>Google Cloud Service Account</h3>
+      <div class="card">
+        <p>ใช้เฉพาะโหมด <strong>☁️ Cloud STT</strong> — ฟรี 60 นาที/เดือน</p>
+        <ol class="steps">
+          <li>ไป Google Cloud Console → สร้าง Project</li>
+          <li>เปิดใช้ <strong>Cloud Speech-to-Text API</strong></li>
+          <li>IAM &amp; Admin → Service Accounts → สร้าง account ใหม่</li>
+          <li>Keys → Add Key → JSON → Download</li>
+          <li>ใส่ path ของไฟล์ JSON ใน ⚙️</li>
+        </ol>
+      </div>
+    </section>
+
+    <!-- ─────────────────── SCRIPTS ─────────────────── -->
+    <section id="scripts">
+      <h2 class="sec-title">Scripts และเครื่องมือ</h2>
+
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>ไฟล์</th><th>หน้าที่</th><th>วิธีรัน</th><th>Input</th><th>Output</th><th>เมื่อไหร่ใช้</th></tr>
+          <tr>
+            <td><code>start_speech_panel.bat</code></td>
+            <td>เปิดโปรแกรมหลัก</td>
+            <td>ดับเบิลคลิก</td>
+            <td>–</td>
+            <td>เปิดหน้าต่าง SpeechPanel</td>
+            <td>ใช้งานปกติทุกวัน</td>
+          </tr>
+          <tr>
+            <td><code>install.bat</code></td>
+            <td>ติดตั้ง Python packages</td>
+            <td>ดับเบิลคลิก</td>
+            <td>–</td>
+            <td>ติดตั้ง pip packages</td>
+            <td>ครั้งแรกหรือหลัง clean install</td>
+          </tr>
+          <tr>
+            <td><code>build.bat</code></td>
+            <td>Build เป็น .exe ด้วย PyInstaller</td>
+            <td>ดับเบิลคลิก</td>
+            <td>SpeechPanel.spec</td>
+            <td><code>dist\SpeechPanel\SpeechPanel.exe</code></td>
+            <td>แจกให้ PC อื่นที่ไม่มี Python</td>
+          </tr>
+          <tr>
+            <td><code>speech_panel.py</code></td>
+            <td>โปรแกรมหลัก (~2200 บรรทัด)</td>
+            <td><code>python speech_panel.py</code></td>
+            <td>config.json</td>
+            <td>UI + log file</td>
+            <td>Development / Debug</td>
+          </tr>
+        </table>
+      </div>
+
+      <h3>รันด้วย Python โดยตรง</h3>
+      <pre><code>cd "Talk to Text SpeechPanel"
+python speech_panel.py</code></pre>
+
+      <h3>Build เป็น .exe</h3>
+      <pre><code># ต้องมี PyInstaller (install.bat ไม่ได้ติดตั้งให้อัตโนมัติ)
+pip install pyinstaller
+build.bat
+
+# Output อยู่ที่:
+dist\SpeechPanel\SpeechPanel.exe</code></pre>
+      <div class="alert alert-info">💡 build.bat copy <code>speech_manual.html</code> และ <code>README.md</code> เข้า dist folder อัตโนมัติ</div>
+    </section>
+
+    <!-- ─────────────────── FILE MAP ─────────────────── -->
+    <section id="filemap">
+      <h2 class="sec-title">แผนผังไฟล์</h2>
+
+      <pre><code>Talk to Text SpeechPanel/
+├── speech_panel.py              ← โปรแกรมหลัก (Python)
+├── speech_panel_config.json     ← ไฟล์ตั้งค่า (auto-save)
+├── speech_panel_config.json.tmp ← ไฟล์ชั่วคราวระหว่าง save (ลบได้)
+├── speech_panel.ico             ← ไอคอนโปรแกรม
+├── speech_panel_crash.log       ← log ทั่วไป + heartbeat (ตัด 500 บรรทัด)
+├── native_crash.log             ← stack trace จาก faulthandler (C-level crash)
+├── start_speech_panel.bat       ← launcher
+├── install.bat                  ← ติดตั้ง packages
+├── build.bat                    ← build เป็น .exe
+├── SpeechPanel.spec             ← PyInstaller spec
+├── requirements.txt             ← รายการ packages
+├── README.md                    ← คู่มือ install สั้น ๆ
+├── speech_manual.html           ← manual HTML (ฉบับเก่า)
+├── guideline/
+│   └── manual.html              ← คู่มือนี้
+├── project-1-275307-41245476467f.json  ← Google Cloud credentials
+├── docs/superpowers/
+│   ├── plans/                   ← แผนการพัฒนา (เก่า)
+│   └── specs/                   ← Design specs (เก่า)
+└── build/
+    └── SpeechPanel/
+        └── warn-SpeechPanel.txt ← คำเตือน PyInstaller</code></pre>
+
+      <div class="alert alert-warn">
+        ⚠️ <strong>อย่า commit</strong> ไฟล์ <code>project-1-275307-41245476467f.json</code> (Google credentials) ไปยัง Git repository สาธารณะ
+      </div>
+    </section>
+
+    <!-- ─────────────────── STATUS ─────────────────── -->
+    <section id="status">
+      <h2 class="sec-title">สถานะปัจจุบัน</h2>
+
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>Version</th><th>v2.0.1</th></tr>
+          <tr><td>Git tag</td><td><code>v2.0.1</code></td></tr>
+          <tr><td>สถานะ Hotkey</td><td>✅ RegisterHotKey x64 ทำงานได้แม้อยู่ในเกม</td></tr>
+          <tr><td>สถานะ Crash</td><td>✅ Native crash (0xc0000005) แก้ด้วย _close_stream + _stopping flag</td></tr>
+          <tr><td>Crash logging</td><td>✅ faulthandler เขียน stack trace ไปยัง native_crash.log</td></tr>
+          <tr><td>Config save</td><td>✅ Atomic (tmp + os.replace)</td></tr>
+          <tr><td>F8 collapse</td><td>✅ Toggle edge tab ด้วย hotkey</td></tr>
+          <tr><td>Version display</td><td>✅ แสดงในหน้าต่าง ⚙️ Settings</td></tr>
+        </table>
+      </div>
+
+      <h3>Version History</h3>
+      <div class="tbl-wrap">
+        <table>
+          <tr><th>Tag</th><th>สิ่งที่เพิ่ม</th></tr>
+          <tr><td><code>v2.0-level-meter</code></td><td>Audio meter, hotkey re-register, heartbeat, Groq Polish, Vocab tabs, Google + Whisper STT</td></tr>
+          <tr><td><code>v2.0-settings-abc</code></td><td>Settings dialog ⚙️: API Key, Hotkey capture, Max segments</td></tr>
+          <tr><td><code>v2.0-perf-fixes</code></td><td>5 perf fixes: F9 hwnd capture, paste delays, recheck 60s, trim log, deiconify lag</td></tr>
+          <tr><td><code>v2.0-registerhotkey</code></td><td>RegisterHotKey v1 (มี 3 fatal bugs x64)</td></tr>
+          <tr><td><code>v2.0-hotkey-x64fix</code></td><td>RegisterHotKey v2: x64 prototypes, SendMessageW, SimpleQueue pump</td></tr>
+          <tr><td><code>v2.0-f8-collapse</code></td><td>F8 hotkey ย่อ/ขยาย panel</td></tr>
+          <tr><td><code>v2.0-bugfix-opus</code></td><td>13 bug fixes: _close_stream, _stopping, atomic config, card guards, faulthandler</td></tr>
+          <tr><td><code>v2.0.1</code></td><td>VERSION='2.0.1', version label ใน Settings</td></tr>
+        </table>
+      </div>
+
+      <h3>Restore version เก่า</h3>
+      <pre><code># restore เฉพาะ source file
+git checkout &lt;tag&gt; -- speech_panel.py
+
+# restore ทุกอย่าง
+git checkout &lt;tag&gt;</code></pre>
+    </section>
+
+    <!-- ─────────────────── HOW TO USE ─────────────────── -->
+    <section id="howto">
+      <h2 class="sec-title">วิธีใช้ทีละขั้นตอน</h2>
+
+      <h3>ติดตั้งครั้งแรก</h3>
+      <ol class="steps">
+        <li>ติดตั้ง <strong>Python 3.11+</strong> จาก python.org — ต้องติ๊ก <strong>"Add Python to PATH"</strong></li>
+        <li>ดับเบิลคลิก <strong>install.bat</strong> — รอจนหน้าต่างแสดง "ติดตั้งเสร็จแล้ว!"</li>
+        <li>ดับเบิลคลิก <strong>start_speech_panel.bat</strong> เพื่อเปิดโปรแกรม</li>
+        <li>(ตัวเลือก) กด ⚙️ → ใส่ Groq API Key เพื่อใช้ AI Polish</li>
+      </ol>
+
+      <h3>ใช้งานประจำวัน</h3>
+      <ol class="steps">
+        <li>เปิดโปรแกรมด้วย <strong>start_speech_panel.bat</strong></li>
+        <li>กด <kbd>F10</kbd> หรือปุ่ม 🎤 เพื่อเริ่มอัดเสียง — แถบ Level Meter จะขยับ</li>
+        <li>พูดแล้วกด <kbd>F10</kbd> อีกครั้ง → ข้อความแสดงในการ์ดใหม่ทันที</li>
+        <li>คลิกการ์ดเพื่อ copy หรือกด <kbd>✨</kbd> เพื่อ Polish ด้วย AI</li>
+        <li>กด <kbd>F8</kbd> เพื่อย่อแผงเป็น edge tab เมื่อไม่ต้องการ</li>
+      </ol>
+
+      <h3>Dictate ใส่ Word / Discord / LINE / ฯลฯ</h3>
+      <ol class="steps">
+        <li>คลิกในพื้นที่ที่ต้องการพิมพ์ (Word, chat box, search bar…)</li>
+        <li>กด <kbd>F9</kbd> — โปรแกรมเริ่มอัดเสียงทันที</li>
+        <li>พูดข้อความที่ต้องการ</li>
+        <li>กด <kbd>F9</kbd> อีกครั้ง → ข้อความถูก paste เข้าแอปเดิมอัตโนมัติ</li>
+      </ol>
+      <div class="alert alert-info">💡 clipboard เดิมถูกบันทึกไว้และจะถูกคืนหลัง paste เสร็จ ไม่ต้องกังวลว่าจะหาย</div>
+
+      <h3>ใช้ Vocab แก้คำถอดผิด</h3>
+      <ol class="steps">
+        <li>อัดเสียงตามปกติ → ข้อความปรากฏในการ์ด</li>
+        <li>ถ้า STT ถอดคำผิด เช่น "ขอโค้ด" แทนที่จะเป็น "Claude Code"</li>
+        <li>เปิดแผง Vocab ฝั่งขวา → เพิ่มคู่ "ขอโค้ด" → "Claude Code"</li>
+        <li>ครั้งต่อไปที่พูด "Claude Code" โปรแกรมจะแก้ให้อัตโนมัติ</li>
+      </ol>
+
+      <h3>ใช้ Placeholder Token (ABC/ABC1)</h3>
+      <ol class="steps">
+        <li>เพิ่มคำใน Vocab โดยเว้นช่อง "คำที่ถอดผิด" ว่าง → ใส่แค่ "คำที่ถูกต้อง"</li>
+        <li>ตอนพูด ใช้คำว่า "ABC" หรือ "ABC 1" เป็น placeholder</li>
+        <li>ในการ์ดจะมีปุ่ม token สีน้ำเงิน — คลิกเพื่อ "เลือก" token นั้น</li>
+        <li>จากนั้นคลิกคำใน Vocab list → คำนั้นแทนที่ token ทุกจุดในการ์ด</li>
+      </ol>
+
+      <h3>Copy ข้อความหลายการ์ดพร้อมกัน</h3>
+      <ol class="steps">
+        <li>ติ๊ก Checkbox ที่มุมซ้ายบนของการ์ดที่ต้องการ (เลือกได้หลายใบ)</li>
+        <li>กดปุ่ม <kbd>📋 Copy ที่เลือก</kbd> ที่ toolbar ด้านบน</li>
+        <li>ข้อความจากทุกการ์ดที่เลือกถูก copy รวมกันไปยัง clipboard</li>
+      </ol>
+
+      <h3>เปิด AI Chat พร้อม copy ข้อความ</h3>
+      <ol class="steps">
+        <li>อัดเสียงและแก้ไขข้อความในการ์ด</li>
+        <li>คลิกการ์ดหรือกดปุ่ม Copy เพื่อ copy ข้อความ</li>
+        <li>เลือก AI ที่ต้องการจาก dropdown ด้านบน (ChatGPT, Claude, Gemini…)</li>
+        <li>กดปุ่ม <kbd>→ เปิด</kbd> → browser เปิดหน้า AI นั้น</li>
+        <li>Paste ข้อความลงใน chat ของ AI</li>
+      </ol>
+
+      <h3>ใช้งานจาก System Tray (เมื่อปิดหน้าต่าง)</h3>
+      <ol class="steps">
+        <li>กด X เพื่อซ่อนหน้าต่าง — โปรแกรมยังทำงานอยู่เบื้องหลัง</li>
+        <li>มองหาไอคอน 🎤 ที่ System Tray มุมขวาล่าง taskbar</li>
+        <li>คลิกขวา → <strong>แสดง/ซ่อน</strong> หรือกด <kbd>Ctrl+Shift+Space</kbd> เพื่อเรียกกลับมา</li>
+        <li>คลิกขวา → <strong>ออกจากโปรแกรม</strong> เพื่อปิดสมบูรณ์</li>
+      </ol>
+
+      <h3>ใช้งานบนเครื่องคนอื่น</h3>
+      <div class="card">
+        <div class="tbl-wrap">
+          <table>
+            <tr><th>รายการ</th><th>สิ่งที่ต้องเตรียม</th></tr>
+            <tr><td>Python</td><td>ติดตั้ง Python 3.11+ <strong>หรือ</strong> ใช้ไฟล์ .exe จาก build.bat (ไม่ต้อง Python)</td></tr>
+            <tr><td>Packages</td><td>รัน install.bat ครั้งแรก (ถ้าใช้ Python โดยตรง)</td></tr>
+            <tr><td>Groq API Key</td><td>สมัครของตัวเองฟรีที่ console.groq.com</td></tr>
+            <tr><td>Google Cloud STT</td><td>ต้องมี Service Account ของตัวเอง (ใช้ของเจ้าของไม่ได้)</td></tr>
+            <tr><td>Whisper model</td><td>โหลดอัตโนมัติครั้งแรก ~3GB รอ 2-5 นาที</td></tr>
+            <tr><td>ไมโครโฟน</td><td>Windows ต้องให้สิทธิ์ microphone ในการตั้งค่า Privacy</td></tr>
+          </table>
+        </div>
+        <div class="alert alert-ok" style="margin-top:10px">
+          ✅ <strong>วิธีที่ง่ายที่สุด:</strong> รัน build.bat → ส่งโฟลเดอร์ <code>dist\SpeechPanel\</code> ให้ — คนรับไม่ต้องติดตั้งอะไรเลย แค่ดับเบิลคลิก SpeechPanel.exe
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────── TROUBLESHOOT ─────────────────── -->
+    <section id="troubleshoot">
+      <h2 class="sec-title">แก้ปัญหา</h2>
+
+      <div class="card">
+        <h3>❌ กด F9/F10/F8 แล้วไม่ตอบสนองในเกม</h3>
+        <p><strong>สาเหตุ:</strong> hotkey อาจขัดแย้งกับเกม หรือ HotkeyServer thread ตายชั่วคราว</p>
+        <p><strong>แก้:</strong></p>
+        <ul>
+          <li>รอ 5 วินาที — watchdog จะ restart server อัตโนมัติ</li>
+          <li>ลองเปลี่ยน hotkey ใน ⚙️ เป็นปุ่มที่เกมไม่ใช้</li>
+          <li>บางเกมบล็อก keyboard input ของ process อื่น — ลอง run SpeechPanel as Administrator</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>❌ โปรแกรมปิดตัวเองกะทันหัน</h3>
+        <p><strong>ตรวจสอบ log:</strong></p>
+        <pre><code># Python crash log
+speech_panel_crash.log
+
+# Native crash (C-level access violation)
+native_crash.log</code></pre>
+        <p><strong>สาเหตุที่พบบ่อย:</strong> audio stream ถูกเขียนทับขณะ PortAudio ยังใช้งานอยู่ (แก้ไขแล้วใน v2.0-bugfix-opus)</p>
+      </div>
+
+      <div class="card">
+        <h3>❌ AI Polish ไม่ทำงาน</h3>
+        <ul>
+          <li>ตรวจสอบว่าใส่ Groq API Key ใน ⚙️ แล้วหรือยัง</li>
+          <li>Error 429 = เกิน quota 30 req/นาที — รอ 1 นาทีแล้วลองใหม่</li>
+          <li>Error 401/403 = API Key ไม่ถูกต้อง — สร้าง key ใหม่ที่ console.groq.com</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>❌ โปรแกรมเปิดสองครั้ง / เปิดไม่ขึ้น</h3>
+        <p>SpeechPanel มี single-instance guard ด้วย Windows Mutex</p>
+        <ul>
+          <li>ถ้าโปรแกรมเปิดอยู่แล้ว: กด <kbd>Ctrl+Shift+Space</kbd> เพื่อแสดง</li>
+          <li>ถ้าเปิดไม่ขึ้นเลย: เปิด Task Manager → ค้นหา python.exe → End Task</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>❌ ไฟล์ config เสียหาย / โปรแกรมเริ่มใหม่โดยไม่มีการตั้งค่า</h3>
+        <p>หาไฟล์ <code>speech_panel_config.json.corrupt</code> — นั่นคือ backup ของ config ก่อนเสียหาย</p>
+        <pre><code># ดูไฟล์ backup
+type speech_panel_config.json.corrupt</code></pre>
+      </div>
+
+      <div class="card">
+        <h3>❌ เสียงไม่ถูกถอด หรือถอดผิดมาก</h3>
+        <ul>
+          <li>ตรวจสอบว่าไมโครโฟนถูกเลือกใน Windows Sound Settings</li>
+          <li>ลองเปลี่ยนโหมด STT — Whisper ให้คุณภาพดีกว่า Free สำหรับภาษาไทย</li>
+          <li>เพิ่ม Vocab pairs สำหรับคำที่ถอดผิดซ้ำ ๆ</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h3>❌ Whisper โหลดนานมาก</h3>
+        <p>model <code>large-v3</code> ใช้เวลาโหลดครั้งแรก 30-120 วินาที ขึ้นกับ SSD/RAM และ GPU VRAM</p>
+        <p>เปลี่ยนเป็น <code>medium</code> หรือ <code>small</code> ในโค้ดบรรทัด 52 เพื่อโหลดเร็วขึ้น</p>
+      </div>
+    </section>
+
+    <!-- ─────────────────── ROADMAP ─────────────────── -->
+    <section id="roadmap">
+      <h2 class="sec-title">Roadmap</h2>
+
+      <h3>✅ เสร็จแล้ว</h3>
+      <ul>
+        <li>RegisterHotKey x64 — hotkey ทำงานได้แม้อยู่ในเกม</li>
+        <li>F8 collapse/expand hotkey</li>
+        <li>Native crash fix (_close_stream + _stopping flag)</li>
+        <li>Atomic config save</li>
+        <li>faulthandler → native_crash.log</li>
+        <li>Version number ใน Settings</li>
+        <li>Vocab Tabs (3 แท็บ, longest-match regex)</li>
+        <li>AI Polish ด้วย Groq API</li>
+        <li>Settings Dialog (API Key, Hotkey capture, Max segments)</li>
+        <li>Single-instance guard</li>
+        <li>System Tray icon</li>
+      </ul>
+
+      <h3>🔜 แนวคิดสำหรับอนาคต</h3>
+      <ul>
+        <li>Auto-punctuation สำหรับโหมด Free (ปัจจุบันเฉพาะ Whisper)</li>
+        <li>Export ข้อความทั้งหมดเป็น .txt / .md</li>
+        <li>ปรับขนาด panel ด้วยการลาก (resizable window)</li>
+        <li>Whisper model selector ใน Settings (ไม่ต้องแก้โค้ด)</li>
+        <li>History / undo สำหรับการแก้ไขใน card</li>
+        <li>Translation mode (ไทย → อังกฤษ อัตโนมัติ)</li>
+      </ul>
+    </section>
+
+  </main>
+</div>
+
+<script>
+  // ─── Theme toggle ───
+  const btn = document.getElementById('theme-btn');
+  const root = document.documentElement;
+  const stored = (() => { try { return localStorage.getItem('sp-theme'); } catch { return null; } })();
+  if (stored) { root.setAttribute('data-theme', stored); btn.textContent = stored === 'dark' ? '☀️' : '🌙'; }
+  btn.addEventListener('click', () => {
+    const cur = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const next = cur === 'dark' ? 'light' : 'dark';
+    root.setAttribute('data-theme', next);
+    btn.textContent = next === 'dark' ? '☀️' : '🌙';
+    try { localStorage.setItem('sp-theme', next); } catch {}
+  });
+
+  // ─── Active nav highlight ───
+  const navLinks = Array.from(document.querySelectorAll('.sidebar nav a'));
+  const sections = navLinks.map(a => document.querySelector(a.getAttribute('href')));
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = navLinks.find(a => a.getAttribute('href') === '#' + e.target.id);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => s && observer.observe(s));
+</script>
+</body>
+</html>
